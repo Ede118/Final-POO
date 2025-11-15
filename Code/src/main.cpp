@@ -47,6 +47,10 @@ std::unordered_map<std::string, CommandFn> buildCommandTable() {
         return ctx.server.ping();
     };
 
+    cmds["start"] = [](const std::string&, CommandContext& ctx) {
+        return "Server state: " + toString(ctx.server.getState());
+    };
+
     cmds["busy"] = [](const std::string&, CommandContext& ctx) {
         return ctx.server.setBusy();
     };
@@ -186,6 +190,7 @@ int main(int argc, char* argv[]) {
     
     listen(server_fd, 5);
     std::cout << "🚀 Servidor escuchando en puerto 8080" << std::endl;
+    std::cout << "🔗 Mandar [start] para empezar el servidor." << std::endl;
     ServerB.press_enter(cleanTerminal);
 
     bool firstFeedback = true;
