@@ -101,9 +101,9 @@ std::string getMimeType(const std::string& path) {
 std::string serveStaticFile(const std::string& requestPath) {
     std::cout << "📁 SOLICITUD DE ARCHIVO: " << requestPath << std::endl;
 
-    // Buscamos primero en la carpeta del cliente (relativa a Code/Server): ../Client/HTML
-    std::string clientBase = "../Client/HTML";
-    std::string serverBase = "."; // carpeta actual del servidor (Code/Server)
+    // Buscamos primero en la carpeta del cliente (relativa a Code/build): ../HTML
+    std::string clientBase = "HTML";
+    std::string serverBase = "."; // carpeta actual del servidor (Code/build)
 
     std::string relpath;
     if (requestPath == "/" || requestPath == "/index.html") relpath = "/signin.html";
@@ -400,8 +400,6 @@ int main(int argc, char* argv[]) {
     
     listen(server_fd, 5);
     std::cout << "🚀 Servidor escuchando en puerto 8080" << std::endl;
-    press_enter(cleanTerminal);
-
 
 
     while(true) {
