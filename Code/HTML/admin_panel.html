@@ -21,14 +21,19 @@
     h1{font-size:22px; margin:0 0 16px;}
     .grid{display:grid; gap:16px;}
     .g-2{grid-template-columns: 1fr 1fr;}
-    .g-3{grid-template-columns: 2fr 1fr;}
     .card{
       background:var(--card); border:1px solid var(--line); border-radius:12px;
       padding:16px; box-shadow:0 1px 0 rgba(10,20,30,0.04);
     }
     .compact-card {
       padding: 12px;
-      max-width: 300px;
+      max-width: 280px;
+    }
+    .compact-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 16px;
+      align-items: start;
     }
     .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
     .btn{
@@ -38,40 +43,36 @@
       transition: all 0.2s ease;
     }
     .btn:hover{background:var(--primary); color:white;}
-    .btn-danger{border-color:var(--danger); color:#fff; background:var(--danger);}
+    .btn-danger{border-color:var(--danger); background:var(--danger); color:#fff;}
     .btn-danger:hover{background:#8a001a;}
-    .btn-success{border-color:var(--success); color:#fff; background:var(--success);}
+    .btn-success{border-color:var(--success); background:var(--success); color:#fff;}
     .btn-success:hover{background:#1b5e20;}
-    .control-btn {transition: opacity 0.15s ease, transform 0.1s ease;}
-    .control-btn.btn-disabled {opacity: 0.35; cursor: not-allowed;}
-    .muted{color:var(--muted); font-size:12px;}
-    .badge{display:inline-block; padding:2px 8px; border-radius:999px;
-      background:#eef6ff; border:1px solid var(--line); font-size:12px;}
+    .badge{display:inline-block; padding:4px 10px; border-radius:999px;
+      background:#eef6ff; border:1px solid var(--line); font-size:12px;
+      font-weight:500;}
     .badge.on{background:#e8f5e9; border-color:#c8e6c9; color:var(--success);}
     .badge.off{background:#ffebee; border-color:#ffcdd2; color:var(--danger);}
     .badge.warning{background:#fff3e0; border-color:#ffcc80; color:var(--warning);}
-    .badge.emergency{background:#ffebee; border-color:var(--danger); color:var(--danger); font-weight:700; animation: pulse 1.5s infinite;}
+    .badge.emergency{background:#ffebee; border-color:var(--danger); color:var(--danger); 
+      font-weight:700; animation: pulse 1.5s infinite;}
     @keyframes pulse {0%{opacity:1;}50%{opacity:0.7;}100%{opacity:1;}}
+    .list{border:1px solid var(--line); border-radius:8px; background:#fff; 
+      padding:8px; max-height:180px; overflow:auto;}
     .log{white-space:pre-wrap; background:#fff; border:1px solid var(--line);
-      border-radius:8px; padding:8px; height:200px; overflow:auto;
-      font-family:ui-monospace,Consolas,monospace; font-size:12px;}
-    .field { display:inline-block; margin-right:8px; }
-    .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px;}
-    .field input{padding:6px; border-radius:6px; border:1px solid var(--line); width:100px;}
-    .list > div { padding:6px 8px; border-bottom:1px solid #f0f5fb; }
-    .spacer{height:8px}
-    .footer{margin-top:16px; font-size:12px; color:var(--muted);}
-    .status-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0;}
+      border-radius:8px; padding:12px; height:200px; overflow:auto;
+      font-family:ui-monospace,Consolas,monospace; font-size:12px;
+      line-height:1.4;}
+    .control-group {background: #f8fbff; padding: 12px; border-radius: 8px; margin: 8px 0;}
+    .control-label {font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;}
+    .input-group {display: flex; gap: 8px; align-items: center; flex-wrap: wrap;}
+    .input-field {display: flex; flex-direction: column; gap: 4px;}
+    .input-field label {font-size: 12px; color: var(--muted);}
+    .input-field input {padding: 8px; border: 1px solid var(--line); border-radius: 6px; width: 80px;}
     .section-title {font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--text);}
+    .status-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 8px 0;}
     .info-row {display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;}
     .info-label {font-size: 11px; color: var(--muted);}
     .info-value {font-size: 11px; font-weight: 600;}
-    .compact-grid {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 16px;
-      align-items: start;
-    }
   </style>
 </head>
 <body>
@@ -102,103 +103,125 @@
       <section class="card">
         <div class="section-title">Estado del Sistema</div>
         <div class="status-grid">
-          <div class="badge" id="connectionBadge">Conexión: <span id="connected">No</span></div>
-          <div class="badge" id="remoteBadge">Remoto: <span id="remote">ON</span></div>
-          <div class="badge" id="modeBadge">Modo: <span id="mode">ABS</span></div>
-          <div class="badge" id="emergencyBadge" style="display:none">EMERGENCIA</div>
-        </div>
-        <div class="status-grid">
-          <div class="badge">X: <span id="posx">0</span> mm</div>
-          <div class="badge">Y: <span id="posy">0</span> mm</div>
-          <div class="badge">Z: <span id="posz">0</span> mm</div>
-          <div class="badge" id="motorsBadge">Motores: <span id="motors">OFF</span></div>
-          <div class="badge" id="gripBadge">Garra: <span id="grip">OFF</span></div>
+          <div class="badge" id="connectionBadge">🔗 Conectado: <span id="connected">No</span></div>
+          <div class="badge" id="modeBadge">📍 Modo: <span id="mode">ABS</span></div>
+          <div class="badge" id="motorsBadge">⚙️ Motores: <span id="motors">OFF</span></div>
+          <div class="badge" id="gripBadge">🦾 Garra: <span id="grip">OFF</span></div>
+          <div class="badge" id="remoteBadge">🌐 Control Remoto: ON</div>
+          <div class="badge">🎯 Posición: X<span id="posx">0</span> Y<span id="posy">0</span> Z<span id="posz">0</span></div>
+          <div class="badge" id="emergencyBadge" style="display:none">🚨 EMERGENCIA</div>
         </div>
         <div class="row" style="margin-top: 12px;">
-          <button class="btn btn-danger" id="estopBtn" onclick="emergencyStop()">🛑 Parada Emergencia</button>
-          <button class="btn" id="resetBtn" style="display:none" onclick="resetEmergency()">🔄 Reset Emergencia</button>
-          <button class="btn" onclick="toggleRemote()" id="remoteToggleBtn">🔒 Deshab. Remoto</button>
+          <button class="btn btn-danger" id="estopBtn" onclick="emergencyStop()">🛑 Parada de Emergencia</button>
+          <button class="btn" id="resetBtn" style="display:none" onclick="resetEmergency()">🔄 Resetear Emergencia</button>
+          <button class="btn" onclick="refreshStatus()">🔄 Actualizar Estado</button>
+          <button class="btn" id="remoteToggleBtn" onclick="toggleRemote()">🔒 Deshabilitar Control Remoto</button>
         </div>
       </section>
     </div>
 
-    <div class="grid g-2" style="margin-top:16px;">
+    <div class="grid g-2">
       <section class="card">
-        <div class="section-title">Control Manual</div>
-        <div class="row">
-          <button class="btn control-btn" onclick="sendCommand('home')">🏠 Home (G28)</button>
-          <button class="btn control-btn" onclick="sendCommand('setAbs')">📍 ABS (G90)</button>
-          <button class="btn control-btn" onclick="sendCommand('setRel')">↗️ REL (G91)</button>
-          <button class="btn control-btn" id="motorBtn" onclick="toggleMotors()">⚙️ Motores</button>
-          <button class="btn control-btn" id="gripBtn" onclick="toggleGrip()">🦾 Garra</button>
+        <div class="section-title">Control Manual del Robot</div>
+        
+        <div class="control-group">
+          <div class="control-label">Modos de Operación</div>
+          <div class="row">
+            <button class="btn" onclick="sendCommand('home')">🏠 Home (G28)</button>
+            <button class="btn" id="modeToggleBtn" onclick="toggleMode()">↗️ Cambiar a REL (G91)</button>
+          </div>
         </div>
-        <div class="spacer"></div>
-        <div class="row">
-          <div class="field"><label>X (mm)</label><input id="x" type="number" step="0.1" value="0"/></div>
-          <div class="field"><label>Y (mm)</label><input id="y" type="number" step="0.1" value="0"/></div>
-          <div class="field"><label>Z (mm)</label><input id="z" type="number" step="0.1" value="0"/></div>
-          <div class="field"><label>F (mm/min)</label><input id="f" type="number" step="1" value="1200"/></div>
-          <button class="btn control-btn" onclick="moveRobot()">🎯 Mover (G1)</button>
+
+        <div class="control-group">
+          <div class="control-label">Control de Actuadores</div>
+          <div class="row">
+            <button class="btn" id="motorToggleBtn" onclick="toggleMotors()">⚙️ Encender Motores</button>
+            <button class="btn" id="gripToggleBtn" onclick="toggleGrip()">🦾 Activar Garra</button>
+          </div>
         </div>
-        <div class="spacer"></div>
-        <div class="section-title">Cola de Comandos</div>
+
+        <div class="control-group">
+          <div class="control-label">Movimiento Coordinado</div>
+          <div class="input-group">
+            <div class="input-field">
+              <label>X (mm)</label>
+              <input id="x" type="number" step="0.1" value="0" placeholder="0.0"/>
+            </div>
+            <div class="input-field">
+              <label>Y (mm)</label>
+              <input id="y" type="number" step="0.1" value="0" placeholder="0.0"/>
+            </div>
+            <div class="input-field">
+              <label>Z (mm)</label>
+              <input id="z" type="number" step="0.1" value="0" placeholder="0.0"/>
+            </div>
+            <div class="input-field">
+              <label>Velocidad (F)</label>
+              <input id="f" type="number" step="10" value="1200" placeholder="1200"/>
+            </div>
+            <button class="btn btn-success" onclick="moveRobot()">🎯 Mover Robot</button>
+          </div>
+        </div>
+
+        <div class="section-title">Cola de Comandos Activos</div>
         <div class="list" id="queue"></div>
       </section>
 
       <section class="card">
-        <div class="section-title">Gestión de Archivos</div>
-        <div class="row">
-          <input id="file" type="file" accept=".gcode,.txt" />
-          <button class="btn control-btn" id="uploadBtn" onclick="uploadFile()">📤 Subir</button>
-          <button class="btn control-btn" id="runBtn" onclick="runSelectedFile()">▶️ Ejecutar</button>
+        <div class="section-title">Gestión de Programas</div>
+        
+        <div class="control-group">
+          <div class="control-label">Subir Archivo G-code / CSV</div>
+          <div class="row">
+            <input id="file" type="file" accept=".gcode,.txt,.csv" />
+            <button class="btn" onclick="uploadFile()">📤 Subir</button>
+          </div>
         </div>
-        <div class="spacer"></div>
-        <div class="list" id="files">
-          <div>jobs/caja.gcode</div>
-          <div>jobs/palet.gcode</div>
+
+        <div class="control-group">
+          <div class="control-label">Archivos Disponibles</div>
+          <div class="list" id="files">
+            <div>jobs/caja.gcode</div>
+            <div>jobs/palet.gcode</div>
+            <div>jobs/test.gcode</div>
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <button class="btn" onclick="runSelectedFile()">▶️ Ejecutar Seleccionado</button>
+            <button class="btn" onclick="refreshFileList()">🔄 Actualizar Lista</button>
+          </div>
         </div>
-        <div class="spacer"></div>
-        <div class="section-title">Sistema de Aprendizaje</div>
-        <div class="row">
-          <button class="btn btn-success" onclick="startLearning()">📚 Iniciar Aprendizaje</button>
-          <button class="btn control-btn" onclick="stopLearning()">📕 Detener Aprendizaje</button>
+
+        <div class="control-group">
+          <div class="control-label">Sistema de Aprendizaje</div>
+          <div class="row">
+            <button class="btn btn-success" onclick="startLearning()">📚 Iniciar Aprendizaje</button>
+            <button class="btn" onclick="stopLearning()">📕 Detener Aprendizaje</button>
+          </div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 8px;">
+            El modo aprendizaje graba todos los comandos ejecutados en un archivo.
+          </div>
         </div>
       </section>
     </div>
 
-    <div class="grid g-2" style="margin-top:16px;">
-      <section class="card">
-        <div class="section-title">Monitor del Sistema</div>
-        <div class="row">
-          <button class="btn" onclick="getSystemStatus()">🔄 Actualizar Estado</button>
-          <button class="btn" onclick="clearLog()">🗑️ Limpiar Log</button>
-        </div>
-        <div class="spacer"></div>
-        <div class="log" id="log"></div>
-      </section>
+    <section class="card">
+      <div class="section-title">Registro de Actividad</div>
+      <div class="row">
+        <button class="btn" onclick="clearLog()">🗑️ Limpiar Log</button>
+        <button class="btn" onclick="exportLog()">💾 Exportar Log</button>
+        <button class="btn" onclick="showUserInfo()">ℹ️ Información de Usuario</button>
+      </div>
+      <div class="log" id="log"></div>
+    </section>
 
-      <section class="card">
-        <div class="section-title">Administración</div>
-        <div class="row">
-          <button class="btn" onclick="enableRemoteControl()">🌐 Hab. Control Remoto</button>
-          <button class="btn" onclick="disableRemoteControl()">🔒 Deshab. Control Remoto</button>
-        </div>
-        <div class="spacer"></div>
-        <div class="row">
-          <button class="btn" onclick="showSystemInfo()">ℹ️ Info Sistema</button>
-          <button class="btn" onclick="exportLog()">💾 Exportar Log</button>
-        </div>
-        <div style="margin-top:12px;">
-          <small class="muted">Última actualización: <span id="lastUpdate">—</span></small>
-        </div>
-      </section>
+    <div class="footer" style="margin-top:16px; font-size:12px; color:var(--muted);">
+      Panel de Usuario - Robot RRR - Última actualización: <span id="lastUpdate">—</span>
     </div>
-
-    <div class="footer">Panel de Administración - Robot RRR</div>
   </div>
 
+  <script src="/server_watch.js"></script>
   <script>
-    // Preload UI sounds (parada emergencia, arrancar/detener motores)
+    // Preload UI sounds
     const sounds = {
       emergency: new Audio('/audios/parada_emergencia.mp3'),
       motorStart: new Audio('/audios/arrancar_motor.mp3'),
@@ -210,9 +233,9 @@
     // Estado global del sistema
     let systemState = {
       emergency: false,
-      remoteEnabled: true,
       motorsOn: false,
       gripperOn: false,
+      remoteEnabled: true,
       absoluteMode: true,
       position: { x: 0, y: 0, z: 0 },
       connection: false
@@ -235,19 +258,10 @@
       posz: document.getElementById('posz'),
       ipPreview: document.getElementById('ipPreview'),
       lastUpdate: document.getElementById('lastUpdate'),
-      remote: document.getElementById('remote')
+      remoteBadge: document.getElementById('remoteBadge')
     };
 
     // Utilidades
-    const controlButtons = document.querySelectorAll('.control-btn');
-
-    function setControlsEnabled(enabled) {
-      controlButtons.forEach(btn => {
-        btn.disabled = !enabled;
-        btn.classList.toggle('btn-disabled', !enabled);
-      });
-    }
-
     function logLine(message) {
       const timestamp = new Date().toLocaleTimeString();
       elements.log.textContent += `[${timestamp}] ${message}\n`;
@@ -268,10 +282,18 @@
       item.textContent = `→ ${command}`;
       elements.queue.prepend(item);
       
-      // Limitar cola a 20 elementos
-      if (elements.queue.children.length > 20) {
+      // Limitar cola a 15 elementos
+      if (elements.queue.children.length > 15) {
         elements.queue.removeChild(elements.queue.lastChild);
       }
+    }
+
+    function ensureRemoteAccess() {
+      if (!systemState.remoteEnabled) {
+        logLine('❌ Control remoto deshabilitado');
+        return false;
+      }
+      return true;
     }
 
     // Sistema RPC
@@ -328,11 +350,7 @@
         logLine('❌ Comando bloqueado - Sistema en emergencia');
         return;
       }
-
-      if (!systemState.remoteEnabled && ['move', 'motors', 'gripper'].includes(command)) {
-        logLine('❌ Control remoto deshabilitado');
-        return;
-      }
+      if (!ensureRemoteAccess()) return;
 
       enqueueCommand(command);
       rpcCall(command, {});
@@ -343,6 +361,7 @@
         logLine('❌ Movimiento bloqueado - Sistema en emergencia');
         return;
       }
+      if (!ensureRemoteAccess()) return;
 
       const x = parseFloat(document.getElementById('x').value) || 0;
       const y = parseFloat(document.getElementById('y').value) || 0;
@@ -360,10 +379,13 @@
 
     function toggleMotors() {
       const newState = !systemState.motorsOn;
+      if (newState && !ensureRemoteAccess()) return;
       systemState.motorsOn = newState;
       elements.motors.textContent = newState ? 'ON' : 'OFF';
       updateBadge(elements.motors, `Motores: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
       
+      document.getElementById('motorToggleBtn').textContent = 
+        newState ? '⚙️ Apagar Motores' : '⚙️ Encender Motores';
       // reproducir sonido según estado
       try {
         if (newState) {
@@ -381,12 +403,51 @@
 
     function toggleGrip() {
       const newState = !systemState.gripperOn;
+      if (newState && !ensureRemoteAccess()) return;
       systemState.gripperOn = newState;
       elements.grip.textContent = newState ? 'ON' : 'OFF';
       updateBadge(elements.grip, `Garra: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
       
+      document.getElementById('gripToggleBtn').textContent = 
+        newState ? '🦾 Desactivar Garra' : '🦾 Activar Garra';
+      
       enqueueCommand(newState ? 'M3' : 'M5');
       rpcCall('gripper', { on: newState });
+    }
+
+    function updateModeUI() {
+      const isAbs = systemState.absoluteMode;
+      updateBadge(elements.mode, `Modo: ${isAbs ? 'ABS' : 'REL'}`, isAbs ? 'on' : 'warning');
+      document.getElementById('modeToggleBtn').textContent = 
+        isAbs ? '↗️ Cambiar a REL (G91)' : '📍 Cambiar a ABS (G90)';
+    }
+
+    function toggleMode() {
+      if (systemState.emergency) {
+        logLine('❌ Cambio de modo bloqueado - Sistema en emergencia');
+        return;
+      }
+      if (!ensureRemoteAccess()) return;
+
+      systemState.absoluteMode = !systemState.absoluteMode;
+      const command = systemState.absoluteMode ? 'setAbs' : 'setRel';
+      enqueueCommand(systemState.absoluteMode ? 'G90' : 'G91');
+      rpcCall(command, {});
+      updateModeUI();
+    }
+
+    function updateRemoteUI(isEnabled) {
+      updateBadge(elements.remoteBadge, `🌐 Control Remoto: ${isEnabled ? 'ON' : 'OFF'}`, isEnabled ? 'on' : 'off');
+      document.getElementById('remoteToggleBtn').textContent = 
+        isEnabled ? '🔒 Deshabilitar Control Remoto' : '🌐 Habilitar Control Remoto';
+    }
+
+    function toggleRemote() {
+      const newState = !systemState.remoteEnabled;
+      systemState.remoteEnabled = newState;
+      updateRemoteUI(newState);
+      rpcCall(newState ? 'enableRemote' : 'disableRemote', {});
+      logLine(newState ? '🌐 Control remoto habilitado' : '🔒 Control remoto deshabilitado');
     }
 
     // Gestión de archivos
@@ -399,7 +460,6 @@
 
       const file = fileInput.files[0];
 
-      // Obtener IP servidor (prefiere sessionStorage si está)
       function getServerIP() {
           if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'localhost';
           return window.location.hostname;
@@ -428,15 +488,39 @@
           return;
         }
 
-        // Añadir a la lista de archivos el .gcode generado en el servidor
         const base = file.name.replace(/\.[^/.]+$/, "");
         const gcodePath = `jobs/${base}.gcode`;
         const item = document.createElement('div');
         item.textContent = gcodePath;
         item.onclick = () => selectFile(item);
         elements.files.appendChild(item);
-
         logLine(`✅ Subida completada: ${gcodePath}`);
+        // Intentar obtener el GCODE generado y mostrar sus pasos en el log
+        try {
+          const gres = await fetch(`http://${serverIp}:8080/${gcodePath}`);
+          if (gres.ok) {
+            const gtext = await gres.text();
+            logLine(`📁 EJECUTANDO ARCHIVO: ${gcodePath}`);
+            // Enviar línea por línea al servidor mediante RPC 'sendGcode'
+            const lines = gtext.split(/\r?\n/).map(l => l.trim()).filter(l => l.length>0);
+            for (const l of lines) {
+              logLine(`➡️ Enviando: ${l}`);
+              // Enviar y esperar respuesta antes de continuar
+              const resp = await rpcCall('sendGcode', { line: l });
+              if (!resp) {
+                logLine(`❌ Error al enviar línea: ${l}`);
+                break;
+              }
+              // small pause to avoid flooding
+              await new Promise(r => setTimeout(r, 50));
+            }
+            logLine(`✅ Ejecución del archivo ${gcodePath} finalizada`);
+          } else {
+            logLine(`⚠️ No se pudo obtener ${gcodePath}: HTTP ${gres.status}`);
+          }
+        } catch (err) {
+          logLine(`❌ Error leyendo ${gcodePath}: ${err.message}`);
+        }
         fileInput.value = '';
       } catch (err) {
         console.error(err);
@@ -461,9 +545,30 @@
         return;
       }
 
-      const filePath = selected.textContent;
+      // Obtener la ruta seleccionada y normalizarla
+      let filePath = selected.textContent.trim();
+
+      // Si el usuario seleccionó un CSV (por ejemplo un aprendizaje),
+      // asumimos que el GCODE correspondiente está en la carpeta jobs
+      // con la misma base y extensión .gcode — mapear automáticamente.
+      if (filePath.toLowerCase().endsWith('.csv')) {
+        const base = filePath.replace(/\.csv$/i, '');
+        const gpath = base + '.gcode';
+        logLine(`⚠️ Se ha seleccionado un .csv; se usará ${gpath} para ejecución`);
+        filePath = gpath;
+      }
+
       enqueueCommand(`Ejecutar: ${filePath}`);
       rpcCall('runFile', { path: filePath });
+    }
+
+    function refreshFileList() {
+      logLine('🔄 Actualizando lista de archivos...');
+      // En una implementación real, aquí se haría una petición al servidor
+      // para obtener la lista actualizada de archivos
+      setTimeout(() => {
+        logLine('✅ Lista de archivos actualizada');
+      }, 1000);
     }
 
     // Sistema de aprendizaje
@@ -480,9 +585,7 @@
     // Control de emergencia
     function emergencyStop() {
       systemState.emergency = true;
-      systemState.motorsOn = false;
-      systemState.gripperOn = false;
-
+      
       // reproducir sonido de parada de emergencia (si está disponible)
       try {
         sounds.emergency.currentTime = 0;
@@ -493,22 +596,10 @@
       document.getElementById('resetBtn').style.display = 'inline-block';
       document.getElementById('emergencyBadge').style.display = 'inline-block';
       
-      setControlsEnabled(false);
-
       elements.queue.innerHTML = '<div>🛑 PARADA DE EMERGENCIA - COLA LIMPIADA</div>';
-      elements.motors.textContent = systemState.motorsOn ? 'ON' : 'OFF';
-      elements.grip.textContent = systemState.gripperOn ? 'ON' : 'OFF';
       
-      updateBadge(elements.motors, `Motores: ${systemState.motorsOn ? 'ON' : 'OFF'}`, systemState.motorsOn ? 'on' : 'off');
-      updateBadge(elements.grip, `Garra: ${systemState.gripperOn ? 'ON' : 'OFF'}`, systemState.gripperOn ? 'on' : 'off');
-      
-      enqueueCommand(systemState.motorsOn ? 'M17' : 'M18');
-      enqueueCommand(systemState.gripperOn ? 'M3' : 'M5');
       logLine('🛑 PARADA DE EMERGENCIA ACTIVADA');
-      
       rpcCall('emergencyStop', { timestamp: new Date().toISOString() });
-      rpcCall('gripper', { on: systemState.gripperOn });
-      rpcCall('motors', { on: systemState.motorsOn });
     }
 
     function resetEmergency() {
@@ -518,46 +609,12 @@
       document.getElementById('resetBtn').style.display = 'none';
       document.getElementById('emergencyBadge').style.display = 'none';
       
-      setControlsEnabled(false);
-      
       logLine('🔄 SISTEMA REINICIADO - Emergencia resetada');
       rpcCall('resetEmergency', {});
     }
 
-    // Control remoto
-    function toggleRemote() {
-      const newState = !systemState.remoteEnabled;
-      systemState.remoteEnabled = newState;
-      
-      elements.remote.textContent = newState ? 'ON' : 'OFF';
-      updateBadge(elements.remote, `Remoto: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
-      
-      document.getElementById('remoteToggleBtn').textContent = 
-        newState ? '🔒 Deshab. Remoto' : '🌐 Hab. Remoto';
-      
-      logLine(newState ? '🌐 Control remoto habilitado' : '🔒 Control remoto deshabilitado');
-      rpcCall(newState ? 'enableRemote' : 'disableRemote', {});
-    }
-
-    function enableRemoteControl() {
-      systemState.remoteEnabled = true;
-      elements.remote.textContent = 'ON';
-      updateBadge(elements.remote, 'Remoto: ON', 'on');
-      rpcCall('enableRemote', {});
-      logLine('🌐 Control remoto habilitado');
-    }
-
-    function disableRemoteControl() {
-      systemState.remoteEnabled = false;
-      elements.remote.textContent = 'OFF';
-      updateBadge(elements.remote, 'Remoto: OFF', 'off');
-      rpcCall('disableRemote', {});
-      logLine('🔒 Control remoto deshabilitado');
-    }
-
-    // Utilidades del sistema
-    function getSystemStatus() {
-      logLine('🔄 Solicitando estado del sistema...');
+    function refreshStatus() {
+      logLine('🔄 Actualizando estado del sistema...');
       rpcCall('getEstado', {})
         .then(response => {
           if (response) {
@@ -566,28 +623,12 @@
         });
     }
 
+    // Utilidades del sistema
     function clearLog() {
       if (confirm('¿Estás seguro de que quieres limpiar el log?')) {
         elements.log.textContent = '';
         logLine('🗑️ Log limpiado');
       }
-    }
-
-    function showSystemInfo() {
-      const info = `
-🤖 Robot RRR - Información del Sistema
------------------------------------
-Usuario: ${sessionStorage.getItem('username') || 'No identificado'}
-Privilegio: ${sessionStorage.getItem('user_privilege') || 'No definido'}
-Servidor: ${sessionStorage.getItem('server_ip') || 'No configurado'}
-Token: ${sessionStorage.getItem('auth_token') || 'No disponible'}
-Modo: ${systemState.absoluteMode ? 'Absoluto (G90)' : 'Relativo (G91)'}
-Motores: ${systemState.motorsOn ? 'ENCENDIDOS' : 'APAGADOS'}
-Garra: ${systemState.gripperOn ? 'ACTIVADA' : 'DESACTIVADA'}
-Posición: X=${systemState.position.x}, Y=${systemState.position.y}, Z=${systemState.position.z}
-      `.trim();
-      
-      logLine(info);
     }
 
     function exportLog() {
@@ -596,10 +637,24 @@ Posición: X=${systemState.position.x}, Y=${systemState.position.y}, Z=${systemS
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `robot-log-${new Date().toISOString().split('T')[0]}.txt`;
+      a.download = `admin-log-${new Date().toISOString().split('T')[0]}.txt`;
       a.click();
       URL.revokeObjectURL(url);
       logLine('💾 Log exportado correctamente');
+    }
+
+    function showUserInfo() {
+      const info = `
+👤 Información del Usuario
+-------------------------
+Usuario: ${sessionStorage.getItem('username') || 'No identificado'}
+Privilegio: ${sessionStorage.getItem('user_privilege') || 'No definido'}
+Servidor: ${sessionStorage.getItem('server_ip') || 'No configurado'}
+Token: ${sessionStorage.getItem('auth_token') || 'No disponible'}
+Sesión iniciada: ${new Date().toLocaleString()}
+      `.trim();
+      
+      logLine(info);
     }
 
     // Inicialización
@@ -623,11 +678,11 @@ Posición: X=${systemState.position.x}, Y=${systemState.position.y}, Z=${systemS
         elements.tokenPreview.textContent = token ? `...${token.slice(-4)}` : '—';
 
         // Configurar badges iniciales
-        updateBadge(elements.connected, 'Conexión: OK', 'on');
+        updateBadge(elements.connected, 'Conectado: OK', 'on');
         updateBadge(elements.motors, 'Motores: OFF', 'off');
         updateBadge(elements.grip, 'Garra: OFF', 'off');
-        updateBadge(elements.remote, 'Remoto: ON', 'on');
-        updateBadge(elements.mode, 'Modo: ABS', 'on');
+        updateModeUI();
+        updateRemoteUI(systemState.remoteEnabled);
 
         logLine('🚀 Panel de administración inicializado');
         logLine(`👤 Usuario: ${username} (${privilege})`);

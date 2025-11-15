@@ -110,6 +110,7 @@
     </form>
   </main>
 
+  <script src="/server_watch.js"></script>
   <script>
   // Obtener la IP del servidor de la URL actual - VERSIÓN MEJORADA
   function getServerIP() {
@@ -231,11 +232,11 @@
         // Redirigir según privilegio después de 2 segundos
       setTimeout(() => {
         if (resultado.privilege === "admin") {
-          window.location.href = "server_panel.html";
+          window.location.href = "./admin_panel.html";
         } else if (resultado.privilege === "user") {
-          window.location.href = "user_panel.html";
+          window.location.href = "./user_panel.html";
         } else {
-          window.location.href = "viewer_panel.html";  // NUEVO: viewer va aquí
+          window.location.href = "./viewer_panel.html";  // NUEVO: viewer va aquí
         }
       }, 2000);
         

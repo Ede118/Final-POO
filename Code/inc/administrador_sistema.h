@@ -1,3 +1,4 @@
+#pragma once
 #ifndef ADMINISTRADOR_SISTEMA_H
 #define ADMINISTRADOR_SISTEMA_H
 

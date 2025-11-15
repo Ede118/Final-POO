@@ -1,3 +1,4 @@
+#pragma once
 #ifndef ESTADO_ROBOT_H
 #define ESTADO_ROBOT_H
 

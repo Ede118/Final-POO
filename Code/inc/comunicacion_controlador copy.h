@@ -1,3 +1,4 @@
+#pragma once
 #ifndef COMUNICACION_CONTROLADOR_H
 #define COMUNICACION_CONTROLADOR_H
 

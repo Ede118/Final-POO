@@ -126,8 +126,7 @@
           <div class="control-label">Modos de Operación</div>
           <div class="row">
             <button class="btn" onclick="sendCommand('home')">🏠 Home (G28)</button>
-            <button class="btn" onclick="sendCommand('setAbs')">📍 ABS (G90)</button>
-            <button class="btn" onclick="sendCommand('setRel')">↗️ REL (G91)</button>
+            <button class="btn" id="modeToggleBtn" onclick="toggleMode()">↗️ Cambiar a REL (G91)</button>
           </div>
         </div>
 
@@ -218,6 +217,7 @@
     </div>
   </div>
 
+  <script src="/server_watch.js"></script>
   <script>
     // Preload UI sounds
     const sounds = {
@@ -397,6 +397,26 @@
       
       enqueueCommand(newState ? 'M3' : 'M5');
       rpcCall('gripper', { on: newState });
+    }
+
+    function updateModeUI() {
+      const isAbs = systemState.absoluteMode;
+      updateBadge(elements.mode, `Modo: ${isAbs ? 'ABS' : 'REL'}`, isAbs ? 'on' : 'warning');
+      document.getElementById('modeToggleBtn').textContent = 
+        isAbs ? '↗️ Cambiar a REL (G91)' : '📍 Cambiar a ABS (G90)';
+    }
+
+    function toggleMode() {
+      if (systemState.emergency) {
+        logLine('❌ Cambio de modo bloqueado - Sistema en emergencia');
+        return;
+      }
+
+      systemState.absoluteMode = !systemState.absoluteMode;
+      const command = systemState.absoluteMode ? 'setAbs' : 'setRel';
+      enqueueCommand(systemState.absoluteMode ? 'G90' : 'G91');
+      rpcCall(command, {});
+      updateModeUI();
     }
 
     // Gestión de archivos
@@ -630,7 +650,7 @@ Sesión iniciada: ${new Date().toLocaleString()}
         updateBadge(elements.connected, 'Conectado: OK', 'on');
         updateBadge(elements.motors, 'Motores: OFF', 'off');
         updateBadge(elements.grip, 'Garra: OFF', 'off');
-        updateBadge(elements.mode, 'Modo: ABS', 'on');
+        updateModeUI();
 
         logLine('🚀 Panel de usuario inicializado');
         logLine(`👤 Usuario: ${username} (${privilege})`);
