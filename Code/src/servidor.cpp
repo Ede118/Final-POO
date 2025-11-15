@@ -4,7 +4,6 @@
 #include <regex>
 #include <fstream>
 #include <filesystem>
-#include <chrono>
 #include <netinet/in.h>
 #include <unistd.h>
 #include "login.h"
@@ -14,20 +13,8 @@
 #include "aprendizaje.h"
 #include "administrador_sistema.h"
 #include "json.hpp"
-
 using json = nlohmann::json;
 namespace fs = std::filesystem;
-
-std::string nowTimestamp() {
-    using namespace std::chrono;
-    auto now = system_clock::now();
-    std::time_t t = system_clock::to_time_t(now);
-    std::tm tm;
-    localtime_r(&t, &tm);
-    char buf[64];
-    std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", &tm);
-    return std::string(buf);
-}
 
 // [Las funciones auxiliares igual que antes...]
 bool endsWith(const std::string& str, const std::string& suffix) {
@@ -53,7 +40,6 @@ bool extractJsonParam(const std::string& body, json& j) {
     }
     return false;
 }
-
 std::string readFile(const std::string& filepath) {
     std::ifstream file(filepath, std::ios::binary);
     if (!file) return "";
@@ -341,10 +327,6 @@ void parseHttpRequest(const std::string& request, std::string& method, std::stri
     std::istringstream iss(request);
     iss >> method >> path;
 }
-
-// ----------------------------------------------------------------------------------------------------------------- //
-// -------------------------------------------------- MAIN -------------------------------------------------------   //
-// ----------------------------------------------------------------------------------------------------------------- //
 
 int main() {
     std::cout << "🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)" << std::endl;
