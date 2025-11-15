@@ -4,6 +4,7 @@
 #include <regex>
 #include <fstream>
 #include <filesystem>
+#include <chrono>
 #include <netinet/in.h>
 #include <unistd.h>
 #include "login.h"
@@ -16,6 +17,17 @@
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+std::string nowTimestamp() {
+    using namespace std::chrono;
+    auto now = system_clock::now();
+    std::time_t t = system_clock::to_time_t(now);
+    std::tm tm;
+    localtime_r(&t, &tm);
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", &tm);
+    return std::string(buf);
+}
 
 // [Las funciones auxiliares igual que antes...]
 bool endsWith(const std::string& str, const std::string& suffix) {
@@ -76,20 +88,6 @@ std::string serveStaticFile(const std::string& requestPath) {
     fs::path serverPath = fs::path(serverBase) / relpath.substr(1);
 
     std::string filepath;
-<<<<<<< HEAD:Code/src/servidor.cpp
-    if (requestPath == "/" || requestPath == "/index.html") {
-        filepath = "HTML/signin.html";
-    } else if (requestPath == "/signin.html") {
-        filepath = "HTML/signin.html";
-    } else if (requestPath == "/user_panel.html") {
-        filepath = "HTML/user_panel.html";
-    } else if (requestPath == "/server_panel.html") {
-        filepath = "HTML/admin_panel.html";
-    } else if (requestPath == "/viewer_panel.html") {
-        filepath = "HTML/viewer_panel.html";
-    } else {
-        filepath = requestPath.substr(1);
-=======
     std::string servedFrom;
 
     if (!relpath.empty() && relpath[0] == '/') {
@@ -101,7 +99,6 @@ std::string serveStaticFile(const std::string& requestPath) {
             filepath = serverPath.string();
             servedFrom = serverBase;
         }
->>>>>>> b88b0db (Function: Aprender & Subir Archivos.):Code/Server/src/servidor.cpp
     }
 
     if (filepath.empty()) {
