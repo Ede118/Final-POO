@@ -198,6 +198,15 @@
   </div>
 
   <script>
+    // Preload UI sounds (parada emergencia, arrancar/detener motores)
+    const sounds = {
+      emergency: new Audio('/audios/parada_emergencia.mp3'),
+      motorStart: new Audio('/audios/arrancar_motor.mp3'),
+      motorStop: new Audio('/audios/detener_motor.mp3'),
+      fueraRango: new Audio('/audios/fuera_rango.mp3')
+    };
+    Object.values(sounds).forEach(a => { a.preload = 'auto'; a.volume = 0.9; });
+
     // Estado global del sistema
     let systemState = {
       emergency: false,
@@ -355,6 +364,17 @@
       elements.motors.textContent = newState ? 'ON' : 'OFF';
       updateBadge(elements.motors, `Motores: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
       
+      // reproducir sonido según estado
+      try {
+        if (newState) {
+          sounds.motorStart.currentTime = 0;
+          sounds.motorStart.play().catch(()=>{});
+        } else {
+          sounds.motorStop.currentTime = 0;
+          sounds.motorStop.play().catch(()=>{});
+        }
+      } catch (e) { /* ignore audio errors */ }
+
       enqueueCommand(newState ? 'M17' : 'M18');
       rpcCall('motors', { on: newState });
     }
@@ -462,6 +482,12 @@
       systemState.emergency = true;
       systemState.motorsOn = false;
       systemState.gripperOn = false;
+
+      // reproducir sonido de parada de emergencia (si está disponible)
+      try {
+        sounds.emergency.currentTime = 0;
+        sounds.emergency.play().catch(()=>{});
+      } catch (e) { /* ignorar errores de audio */ }
 
       document.getElementById('estopBtn').style.display = 'none';
       document.getElementById('resetBtn').style.display = 'inline-block';
