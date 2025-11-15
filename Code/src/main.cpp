@@ -6,6 +6,10 @@
 #include <filesystem>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <cstdlib>
+#include <thread>
+#include <chrono>
+
 #include "login.h"
 #include "robot_controller_simple.h"
 #include "comunicacion_controlador_simple.h"
@@ -13,8 +17,43 @@
 #include "aprendizaje.h"
 #include "administrador_sistema.h"
 #include "json.hpp"
+
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+void press_enter(bool flag) {
+    if (flag){
+        std::string dummy;
+        std::getline(std::cin, dummy);  // Bloquea hasta ENTER
+        std::system("clear");
+    } else{
+        std::string dummy;
+        std::getline(std::cin, dummy);  // Bloquea hasta ENTER
+    }
+}
+
+void pause_sec(int s) {
+    std::this_thread::sleep_for(std::chrono::seconds(s));
+}
+
+
+bool parseCleanFlag(int argc, char* argv[]) {
+    bool clean = false;
+    const std::string key = "--cleanterminal=";
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg.rfind(key, 0) == 0) { 
+            std::string value = arg.substr(key.size());
+            if (value == "y" || value == "yes" || value == "1") {
+                clean = true;
+            }
+        }
+    }
+    return clean;
+}
+
+
 
 // [Las funciones auxiliares igual que antes...]
 bool endsWith(const std::string& str, const std::string& suffix) {
@@ -328,7 +367,9 @@ void parseHttpRequest(const std::string& request, std::string& method, std::stri
     iss >> method >> path;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    bool cleanTerminal = parseCleanFlag(argc, argv);
+
     std::cout << "🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)" << std::endl;
 
     Login login;
@@ -353,11 +394,15 @@ int main() {
     
     if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
         std::cerr << "❌ ERROR bind: " << strerror(errno) << std::endl;
+        pause_sec(5);
         return 1;
     }
     
     listen(server_fd, 5);
     std::cout << "🚀 Servidor escuchando en puerto 8080" << std::endl;
+    press_enter(cleanTerminal);
+
+
 
     while(true) {
         int client_fd = accept(server_fd, nullptr, nullptr);
