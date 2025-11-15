@@ -63,8 +63,20 @@ std::string getMimeType(const std::string& path) {
 
 std::string serveStaticFile(const std::string& requestPath) {
     std::cout << "📁 SOLICITUD DE ARCHIVO: " << requestPath << std::endl;
-    
+
+    // Buscamos primero en la carpeta del cliente (relativa a Code/Server): ../Client/HTML
+    std::string clientBase = "../Client/HTML";
+    std::string serverBase = "."; // carpeta actual del servidor (Code/Server)
+
+    std::string relpath;
+    if (requestPath == "/" || requestPath == "/index.html") relpath = "/signin.html";
+    else relpath = requestPath;
+
+    fs::path clientPath = fs::path(clientBase) / relpath.substr(1);
+    fs::path serverPath = fs::path(serverBase) / relpath.substr(1);
+
     std::string filepath;
+<<<<<<< HEAD:Code/src/servidor.cpp
     if (requestPath == "/" || requestPath == "/index.html") {
         filepath = "HTML/signin.html";
     } else if (requestPath == "/signin.html") {
@@ -77,15 +89,30 @@ std::string serveStaticFile(const std::string& requestPath) {
         filepath = "HTML/viewer_panel.html";
     } else {
         filepath = requestPath.substr(1);
+=======
+    std::string servedFrom;
+
+    if (!relpath.empty() && relpath[0] == '/') {
+        // try client dir first
+        if (fs::exists(clientPath) && fs::is_regular_file(clientPath)) {
+            filepath = clientPath.string();
+            servedFrom = clientBase;
+        } else if (fs::exists(serverPath) && fs::is_regular_file(serverPath)) {
+            filepath = serverPath.string();
+            servedFrom = serverBase;
+        }
+>>>>>>> b88b0db (Function: Aprender & Subir Archivos.):Code/Server/src/servidor.cpp
     }
-    
-    if (!fs::exists(filepath)) {
+
+    if (filepath.empty()) {
         return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\n\r\n404 Not Found";
     }
-    
+
+    std::cout << "📁 Sirviendo archivo: " << filepath << " (desde: " << servedFrom << ")" << std::endl;
+
     std::string content = readFile(filepath);
     std::string mimeType = getMimeType(filepath);
-    
+
     std::ostringstream response;
     response << "HTTP/1.1 200 OK\r\n"
              << "Content-Type: " << mimeType << "\r\n"
@@ -93,7 +120,7 @@ std::string serveStaticFile(const std::string& requestPath) {
              << "Access-Control-Allow-Origin: *\r\n"
              << "\r\n"
              << content;
-    
+
     return response.str();
 }
 
@@ -193,6 +220,51 @@ std::string procesarRPC(const std::string& body, Login& login, RobotControllerSi
                 << "</struct></value></param></params></methodResponse>";
         }
     }
+    else if (metodo == "runFile") {
+        json j;
+        if (extractJsonParam(body, j)) {
+            std::string path = j.value("path", "");
+            // Sanear path: no permitir traversal
+            if (path.find("..") != std::string::npos) {
+                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+                    << "<member><name>status</name><value><string>error</string></value></member>"
+                    << "<member><name>message</name><value><string>Ruta no permitida</string></value></member>"
+                    << "</struct></value></param></params></methodResponse>";
+            } else {
+                if (!fs::exists(path)) {
+                    xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+                        << "<member><name>status</name><value><string>error</string></value></member>"
+                        << "<member><name>message</name><value><string>Archivo no encontrado</string></value></member>"
+                        << "</struct></value></param></params></methodResponse>";
+                } else {
+                    robot.ejecutarArchivo(path);
+                    xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+                        << "<member><name>status</name><value><string>success</string></value></member>"
+                        << "<member><name>message</name><value><string>Ejecución iniciada: " << path << "</string></value></member>"
+                        << "</struct></value></param></params></methodResponse>";
+                }
+            }
+        }
+    }
+    else if (metodo == "sendGcode") {
+        json j;
+        if (extractJsonParam(body, j)) {
+            std::string line = j.value("line", "");
+            if (!line.empty()) {
+                std::cout << "➡️ EJECUTANDO LÍNEA GCODE: " << line << std::endl;
+                robot.ejecutarComando(line);
+                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+                    << "<member><name>status</name><value><string>success</string></value></member>"
+                    << "<member><name>message</name><value><string>Comando enviado: " << line << "</string></value></member>"
+                    << "</struct></value></param></params></methodResponse>";
+            } else {
+                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+                    << "<member><name>status</name><value><string>error</string></value></member>"
+                    << "<member><name>message</name><value><string>Línea vacía</string></value></member>"
+                    << "</struct></value></param></params></methodResponse>";
+            }
+        }
+    }
     else if(metodo == "emergencyStop") {
         robot.emergencia();
         xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
@@ -238,6 +310,22 @@ std::string procesarRPC(const std::string& body, Login& login, RobotControllerSi
         << "<member><name>message</name><value><string>Home ejecutado</string></value></member>"
         << "</struct></value></param></params></methodResponse>";
 }
+    else if (metodo == "startLearning") {
+        // Iniciar modo aprendizaje: abrir archivo para registrar comandos
+        aprendizaje.iniciar();
+        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+            << "<member><name>status</name><value><string>success</string></value></member>"
+            << "<member><name>message</name><value><string>Aprendizaje iniciado</string></value></member>"
+            << "</struct></value></param></params></methodResponse>";
+    }
+    else if (metodo == "stopLearning") {
+        // Detener modo aprendizaje: cerrar archivo y generar CSV
+        aprendizaje.detener();
+        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+            << "<member><name>status</name><value><string>success</string></value></member>"
+            << "<member><name>message</name><value><string>Aprendizaje detenido y guardado</string></value></member>"
+            << "</struct></value></param></params></methodResponse>";
+    }
     else {
         xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
             << "<member><name>status</name><value><string>error</string></value></member>"
@@ -313,22 +401,114 @@ int main() {
                 respuestaHttp = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: 0\r\n\r\n";
             }
             else if (method == "POST") {
-                size_t body_pos = req.find("\r\n\r\n");
-                if (body_pos != std::string::npos) {
-                    std::string body = req.substr(body_pos + 4);
-                    std::string resp = procesarRPC(body, login, robot, estado, aprendizaje, admin);
-                    
-                    std::ostringstream out;
-                    out << "HTTP/1.1 200 OK\r\n"
-                        << "Access-Control-Allow-Origin: *\r\n"
-                        << "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
-                        << "Access-Control-Allow-Headers: Content-Type\r\n"
-                        << "Content-Type: text/xml\r\n"
-                        << "Content-Length: " << resp.size() << "\r\n"
-                        << "\r\n"
-                        << resp;
-                    respuestaHttp = out.str();
-                }
+                        size_t body_pos = req.find("\r\n\r\n");
+                        if (body_pos != std::string::npos) {
+                            std::string body = req.substr(body_pos + 4);
+
+                            // Si la ruta es /upload -> guardar CSV, convertir a .gcode y ejecutar
+                            if (path.rfind("/upload", 0) == 0) {
+                                try {
+                                    // Extraer nombre de archivo desde query ?name=...
+                                    std::string filename = "uploaded.csv";
+                                    auto qpos = path.find('?');
+                                    if (qpos != std::string::npos) {
+                                        std::string query = path.substr(qpos + 1);
+                                        // buscar name=
+                                        auto npos = query.find("name=");
+                                        if (npos != std::string::npos) {
+                                            filename = query.substr(npos + 5);
+                                            // decode simple %20 etc.
+                                            auto urlDecode = [](std::string s){
+                                                std::string out; out.reserve(s.size());
+                                                for (size_t i=0;i<s.size();++i) {
+                                                    if (s[i]=='%' && i+2<s.size()) {
+                                                        std::string hex = s.substr(i+1,2);
+                                                        char c = (char) strtol(hex.c_str(), nullptr, 16);
+                                                        out.push_back(c); i+=2;
+                                                    } else if (s[i]=='+') out.push_back(' ');
+                                                    else out.push_back(s[i]);
+                                                }
+                                                return out;
+                                            };
+                                            filename = urlDecode(filename);
+                                        }
+                                    }
+
+                                    // Sanear filename: quitar directorios
+                                    size_t lastSlash = filename.find_last_of("/\\");
+                                    if (lastSlash != std::string::npos) filename = filename.substr(lastSlash+1);
+
+                                    namespace fs = std::filesystem;
+                                    fs::create_directories("uploads");
+                                    fs::create_directories("jobs");
+
+                                    fs::path csvpath = fs::path("uploads") / filename;
+                                    // Guardar CSV crudo
+                                    std::ofstream fout(csvpath, std::ios::out | std::ios::binary);
+                                    fout << body;
+                                    fout.close();
+
+                                    // Convertir CSV a GCODE (.gcode)
+                                    std::ifstream fin(csvpath);
+                                    std::string base = filename;
+                                    // quitar extension .csv
+                                    auto posdot = base.find_last_of('.');
+                                    if (posdot != std::string::npos) base = base.substr(0,posdot);
+                                    fs::path gcodepath = fs::path("jobs") / (base + ".gcode");
+                                    std::ofstream gout(gcodepath, std::ios::out | std::ios::trunc);
+                                    if (fin && gout) {
+                                        std::string line;
+                                        bool first = true;
+                                        while (std::getline(fin, line)) {
+                                            if (first) { first = false; continue; } // saltar header
+                                            // trim
+                                            auto l = line;
+                                            while (!l.empty() && (l.back()=='\r' || l.back()=='\n')) l.pop_back();
+                                            if (l.size()>=2 && l.front()=='"' && l.back()=='"') {
+                                                l = l.substr(1, l.size()-2);
+                                                // des-escape ""
+                                                std::string tmp; tmp.reserve(l.size());
+                                                for (size_t i=0;i<l.size();++i) {
+                                                    if (l[i]=='"' && i+1<l.size() && l[i+1]=='"') { tmp.push_back('"'); ++i; }
+                                                    else tmp.push_back(l[i]);
+                                                }
+                                                l = tmp;
+                                            }
+                                            if (!l.empty()) gout << l << "\n";
+                                        }
+                                        gout.close();
+                                        fin.close();
+
+                                        // No ejecutar automáticamente: guardar el GCODE y devolver ruta.
+                                        std::ostringstream out;
+                                        std::string ok = std::string("Archivo subido: ") + gcodepath.string();
+                                        out << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << ok.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << ok;
+                                        respuestaHttp = out.str();
+                                    } else {
+                                        std::string err = "Error al convertir CSV a GCODE";
+                                        std::ostringstream out; out << "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: " << err.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << err;
+                                        respuestaHttp = out.str();
+                                    }
+                                } catch (const std::exception& e) {
+                                    std::string err = std::string("Exception: ") + e.what();
+                                    std::ostringstream out; out << "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: " << err.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << err;
+                                    respuestaHttp = out.str();
+                                }
+                            } else {
+                                std::string resp = procesarRPC(body, login, robot, estado, aprendizaje, admin);
+                        
+                                std::ostringstream out;
+                                out << "HTTP/1.1 200 OK\r\n"
+                                    << "Access-Control-Allow-Origin: *\r\n"
+                                    << "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+                                    << "Access-Control-Allow-Headers: Content-Type\r\n"
+                                    << "Content-Type: text/xml\r\n"
+                                    << "Content-Length: " << resp.size() << "\r\n"
+                                    << "\r\n"
+                                    << resp;
+                                respuestaHttp = out.str();
+                            }
+                        }
             }
             
             if (!respuestaHttp.empty()) {

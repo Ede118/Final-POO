@@ -170,9 +170,9 @@
         <div class="section-title">Gestión de Programas</div>
         
         <div class="control-group">
-          <div class="control-label">Subir Archivo G-code</div>
+          <div class="control-label">Subir Archivo G-code / CSV</div>
           <div class="row">
-            <input id="file" type="file" accept=".gcode,.txt" />
+            <input id="file" type="file" accept=".gcode,.txt,.csv" />
             <button class="btn" onclick="uploadFile()">📤 Subir</button>
           </div>
         </div>
@@ -381,7 +381,7 @@
     }
 
     // Gestión de archivos
-    function uploadFile() {
+    async function uploadFile() {
       const fileInput = document.getElementById('file');
       if (!fileInput.files.length) {
         alert('Por favor selecciona un archivo');
@@ -389,16 +389,74 @@
       }
 
       const file = fileInput.files[0];
-      const fileName = `jobs/${file.name}`;
-      
-      // Simular subida
-      const item = document.createElement('div');
-      item.textContent = fileName;
-      item.onclick = () => selectFile(item);
-      elements.files.appendChild(item);
-      
-      logLine(`📁 Archivo subido: ${fileName}`);
-      fileInput.value = '';
+
+      function getServerIP() {
+          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'localhost';
+          return window.location.hostname;
+      }
+      const serverIp = sessionStorage.getItem('server_ip') || getServerIP();
+
+      if (!serverIp) {
+        alert('No hay servidor configurado');
+        return;
+      }
+
+      const encodedName = encodeURIComponent(file.name);
+
+      try {
+        logLine(`📤 Subiendo archivo: ${file.name} a ${serverIp}`);
+        const res = await fetch(`http://${serverIp}:8080/upload?name=${encodedName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/csv' },
+          body: file
+        });
+
+        const text = await res.text();
+        if (!res.ok) {
+          logLine(`❌ Error al subir: ${text}`);
+          alert('Error al subir: ' + text);
+          return;
+        }
+
+        const base = file.name.replace(/\.[^/.]+$/, "");
+        const gcodePath = `jobs/${base}.gcode`;
+        const item = document.createElement('div');
+        item.textContent = gcodePath;
+        item.onclick = () => selectFile(item);
+        elements.files.appendChild(item);
+        logLine(`✅ Subida completada: ${gcodePath}`);
+        // Intentar obtener el GCODE generado y mostrar sus pasos en el log
+        try {
+          const gres = await fetch(`http://${serverIp}:8080/${gcodePath}`);
+          if (gres.ok) {
+            const gtext = await gres.text();
+            logLine(`📁 EJECUTANDO ARCHIVO: ${gcodePath}`);
+            // Enviar línea por línea al servidor mediante RPC 'sendGcode'
+            const lines = gtext.split(/\r?\n/).map(l => l.trim()).filter(l => l.length>0);
+            for (const l of lines) {
+              logLine(`➡️ Enviando: ${l}`);
+              // Enviar y esperar respuesta antes de continuar
+              const resp = await rpcCall('sendGcode', { line: l });
+              if (!resp) {
+                logLine(`❌ Error al enviar línea: ${l}`);
+                break;
+              }
+              // small pause to avoid flooding
+              await new Promise(r => setTimeout(r, 50));
+            }
+            logLine(`✅ Ejecución del archivo ${gcodePath} finalizada`);
+          } else {
+            logLine(`⚠️ No se pudo obtener ${gcodePath}: HTTP ${gres.status}`);
+          }
+        } catch (err) {
+          logLine(`❌ Error leyendo ${gcodePath}: ${err.message}`);
+        }
+        fileInput.value = '';
+      } catch (err) {
+        console.error(err);
+        logLine(`❌ Error al subir archivo: ${err.message}`);
+        alert('Error al subir: ' + err.message);
+      }
     }
 
     function selectFile(element) {
@@ -417,7 +475,19 @@
         return;
       }
 
-      const filePath = selected.textContent;
+      // Obtener la ruta seleccionada y normalizarla
+      let filePath = selected.textContent.trim();
+
+      // Si el usuario seleccionó un CSV (por ejemplo un aprendizaje),
+      // asumimos que el GCODE correspondiente está en la carpeta jobs
+      // con la misma base y extensión .gcode — mapear automáticamente.
+      if (filePath.toLowerCase().endsWith('.csv')) {
+        const base = filePath.replace(/\.csv$/i, '');
+        const gpath = base + '.gcode';
+        logLine(`⚠️ Se ha seleccionado un .csv; se usará ${gpath} para ejecución`);
+        filePath = gpath;
+      }
+
       enqueueCommand(`Ejecutar: ${filePath}`);
       rpcCall('runFile', { path: filePath });
     }
