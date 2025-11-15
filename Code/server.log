@@ -1,3 +1,4 @@
+nohup: no se tendrá en cuenta la entrada
 🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)
 🔌 Conectando a base de datos SQLite...
 ✅ Conectado a SQLite correctamente
@@ -7,13 +8,3 @@
 📝 Modo simulación activado
 🤖 RobotControllerSimple inicializado
 🚀 Servidor escuchando en puerto 8080
-🌐 SOLICITUD: POST /
-=== INICIO PROCESAR RPC ===
-🔍 MÉTODO: startLearning
-📋 BODY: <?xml version="1.0"?><methodCall><methodName>startLearning</methodName><params><param><value><string>{}</string></value></param></params></methodCall>
-📋 JSON recibido: {}
-📘 Aprendizaje iniciado -> aprendizaje gcode/aprendizaje_20251115_111333.gcode
-📤 RESPUESTA XML: <?xml version="1.0"?><methodResponse><params><param><value><struct><member><name>status</name><value><string>success</string></value></member><member><name>message</name><value><string>Aprendizaje iniciado</string></value></member></struct></value></param></params></methodResponse>
-=== FIN PROCESAR RPC ===
-✅ RESPUESTA ENVIADA (467 bytes)
-----------------------------------------

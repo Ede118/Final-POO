@@ -42,8 +42,6 @@
     .btn-danger:hover{background:#8a001a;}
     .btn-success{border-color:var(--success); color:#fff; background:var(--success);}
     .btn-success:hover{background:#1b5e20;}
-    .control-btn {transition: opacity 0.15s ease, transform 0.1s ease;}
-    .control-btn.btn-disabled {opacity: 0.35; cursor: not-allowed;}
     .muted{color:var(--muted); font-size:12px;}
     .badge{display:inline-block; padding:2px 8px; border-radius:999px;
       background:#eef6ff; border:1px solid var(--line); font-size:12px;}
@@ -122,15 +120,16 @@
       </section>
     </div>
 
+    <!-- El resto del código se mantiene igual -->
     <div class="grid g-2" style="margin-top:16px;">
       <section class="card">
         <div class="section-title">Control Manual</div>
         <div class="row">
-          <button class="btn control-btn" onclick="sendCommand('home')">🏠 Home (G28)</button>
-          <button class="btn control-btn" onclick="sendCommand('setAbs')">📍 ABS (G90)</button>
-          <button class="btn control-btn" onclick="sendCommand('setRel')">↗️ REL (G91)</button>
-          <button class="btn control-btn" id="motorBtn" onclick="toggleMotors()">⚙️ Motores</button>
-          <button class="btn control-btn" id="gripBtn" onclick="toggleGrip()">🦾 Garra</button>
+          <button class="btn" onclick="sendCommand('home')">🏠 Home (G28)</button>
+          <button class="btn" onclick="sendCommand('setAbs')">📍 ABS (G90)</button>
+          <button class="btn" onclick="sendCommand('setRel')">↗️ REL (G91)</button>
+          <button class="btn" id="motorBtn" onclick="toggleMotors()">⚙️ Motores</button>
+          <button class="btn" id="gripBtn" onclick="toggleGrip()">🦾 Garra</button>
         </div>
         <div class="spacer"></div>
         <div class="row">
@@ -138,7 +137,7 @@
           <div class="field"><label>Y (mm)</label><input id="y" type="number" step="0.1" value="0"/></div>
           <div class="field"><label>Z (mm)</label><input id="z" type="number" step="0.1" value="0"/></div>
           <div class="field"><label>F (mm/min)</label><input id="f" type="number" step="1" value="1200"/></div>
-          <button class="btn control-btn" onclick="moveRobot()">🎯 Mover (G1)</button>
+          <button class="btn" onclick="moveRobot()">🎯 Mover (G1)</button>
         </div>
         <div class="spacer"></div>
         <div class="section-title">Cola de Comandos</div>
@@ -149,8 +148,8 @@
         <div class="section-title">Gestión de Archivos</div>
         <div class="row">
           <input id="file" type="file" accept=".gcode,.txt" />
-          <button class="btn control-btn" id="uploadBtn" onclick="uploadFile()">📤 Subir</button>
-          <button class="btn control-btn" id="runBtn" onclick="runSelectedFile()">▶️ Ejecutar</button>
+          <button class="btn" id="uploadBtn" onclick="uploadFile()">📤 Subir</button>
+          <button class="btn" id="runBtn" onclick="runSelectedFile()">▶️ Ejecutar</button>
         </div>
         <div class="spacer"></div>
         <div class="list" id="files">
@@ -161,7 +160,7 @@
         <div class="section-title">Sistema de Aprendizaje</div>
         <div class="row">
           <button class="btn btn-success" onclick="startLearning()">📚 Iniciar Aprendizaje</button>
-          <button class="btn control-btn" onclick="stopLearning()">📕 Detener Aprendizaje</button>
+          <button class="btn" onclick="stopLearning()">📕 Detener Aprendizaje</button>
         </div>
       </section>
     </div>
@@ -198,6 +197,7 @@
   </div>
 
   <script>
+    // [Mismo código JavaScript del anterior]
     // Estado global del sistema
     let systemState = {
       emergency: false,
@@ -230,15 +230,6 @@
     };
 
     // Utilidades
-    const controlButtons = document.querySelectorAll('.control-btn');
-
-    function setControlsEnabled(enabled) {
-      controlButtons.forEach(btn => {
-        btn.disabled = !enabled;
-        btn.classList.toggle('btn-disabled', !enabled);
-      });
-    }
-
     function logLine(message) {
       const timestamp = new Date().toLocaleTimeString();
       elements.log.textContent += `[${timestamp}] ${message}\n`;
@@ -267,23 +258,15 @@
 
     // Sistema RPC
     async function rpcCall(method, params = {}) {
-        // Obtener IP automáticamente de la URL
-        function getServerIP() {
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                return 'localhost';
-            }
-            return window.location.hostname;
-        }
-        
-        const serverIp = getServerIP();
-        elements.ipPreview.textContent = serverIp;
+      const serverIp = sessionStorage.getItem('server_ip');
+      elements.ipPreview.textContent = serverIp || 'No configurado';
 
-        if (!serverIp) {
-            logLine('❌ Error: No hay IP del servidor configurada');
-            return null;
-        }
+      if (!serverIp) {
+        logLine('❌ Error: No hay IP del servidor configurada');
+        return null;
+      }
 
-        const xmlBody = `<?xml version="1.0"?>
+      const xmlBody = `<?xml version="1.0"?>
 <methodCall>
   <methodName>${method}</methodName>
   <params>
@@ -291,26 +274,26 @@
   </params>
 </methodCall>`;
 
-        try {
-            logLine(`📤 Enviando: ${method}`);
-            const response = await fetch(`http://${serverIp}:8080`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/xml' },
-                body: xmlBody
-            });
+      try {
+        logLine(`📤 Enviando: ${method}`);
+        const response = await fetch(`http://${serverIp}:8080`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/xml' },
+          body: xmlBody
+        });
 
-            const responseText = await response.text();
-            
-            if (responseText.includes('fault') || !response.ok) {
-                throw new Error(`Error en RPC: ${responseText}`);
-            }
-
-            logLine(`✅ ${method} ejecutado correctamente`);
-            return responseText;
-        } catch (error) {
-            logLine(`❌ Error en ${method}: ${error.message}`);
-            return null;
+        const responseText = await response.text();
+        
+        if (responseText.includes('fault') || !response.ok) {
+          throw new Error(`Error en RPC: ${responseText}`);
         }
+
+        logLine(`✅ ${method} ejecutado correctamente`);
+        return responseText;
+      } catch (error) {
+        logLine(`❌ Error en ${method}: ${error.message}`);
+        return null;
+      }
     }
 
     // Funciones de control del robot
@@ -370,7 +353,7 @@
     }
 
     // Gestión de archivos
-    async function uploadFile() {
+    function uploadFile() {
       const fileInput = document.getElementById('file');
       if (!fileInput.files.length) {
         alert('Por favor selecciona un archivo');
@@ -378,51 +361,16 @@
       }
 
       const file = fileInput.files[0];
-
-      // Obtener IP servidor (prefiere sessionStorage si está)
-      function getServerIP() {
-          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return 'localhost';
-          return window.location.hostname;
-      }
-      const serverIp = sessionStorage.getItem('server_ip') || getServerIP();
-
-      if (!serverIp) {
-        alert('No hay servidor configurado');
-        return;
-      }
-
-      const encodedName = encodeURIComponent(file.name);
-
-      try {
-        logLine(`📤 Subiendo archivo: ${file.name} a ${serverIp}`);
-        const res = await fetch(`http://${serverIp}:8080/upload?name=${encodedName}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/csv' },
-          body: file
-        });
-
-        const text = await res.text();
-        if (!res.ok) {
-          logLine(`❌ Error al subir: ${text}`);
-          alert('Error al subir: ' + text);
-          return;
-        }
-
-        // Añadir a la lista de archivos el .gcode generado en el servidor
-        const base = file.name.replace(/\.[^/.]+$/, "");
-        const gcodePath = `jobs/${base}.gcode`;
-        const item = document.createElement('div');
-        item.textContent = gcodePath;
-        item.onclick = () => selectFile(item);
-        elements.files.appendChild(item);
-
-        logLine(`✅ Subida completada: ${gcodePath}`);
-        fileInput.value = '';
-      } catch (err) {
-        console.error(err);
-        logLine(`❌ Error al subir archivo: ${err.message}`);
-        alert('Error al subir: ' + err.message);
-      }
+      const fileName = `jobs/${file.name}`;
+      
+      // Simular subida (en una implementación real aquí iría el código para subir el archivo)
+      const item = document.createElement('div');
+      item.textContent = fileName;
+      item.onclick = () => selectFile(item);
+      elements.files.appendChild(item);
+      
+      logLine(`📁 Archivo subido: ${fileName}`);
+      fileInput.value = '';
     }
 
     function selectFile(element) {
@@ -460,29 +408,15 @@
     // Control de emergencia
     function emergencyStop() {
       systemState.emergency = true;
-      systemState.motorsOn = false;
-      systemState.gripperOn = false;
-
+      
       document.getElementById('estopBtn').style.display = 'none';
       document.getElementById('resetBtn').style.display = 'inline-block';
       document.getElementById('emergencyBadge').style.display = 'inline-block';
       
-      setControlsEnabled(false);
-
       elements.queue.innerHTML = '<div>🛑 PARADA DE EMERGENCIA - COLA LIMPIADA</div>';
-      elements.motors.textContent = systemState.motorsOn ? 'ON' : 'OFF';
-      elements.grip.textContent = systemState.gripperOn ? 'ON' : 'OFF';
       
-      updateBadge(elements.motors, `Motores: ${systemState.motorsOn ? 'ON' : 'OFF'}`, systemState.motorsOn ? 'on' : 'off');
-      updateBadge(elements.grip, `Garra: ${systemState.gripperOn ? 'ON' : 'OFF'}`, systemState.gripperOn ? 'on' : 'off');
-      
-      enqueueCommand(systemState.motorsOn ? 'M17' : 'M18');
-      enqueueCommand(systemState.gripperOn ? 'M3' : 'M5');
       logLine('🛑 PARADA DE EMERGENCIA ACTIVADA');
-      
       rpcCall('emergencyStop', { timestamp: new Date().toISOString() });
-      rpcCall('gripper', { on: systemState.gripperOn });
-      rpcCall('motors', { on: systemState.motorsOn });
     }
 
     function resetEmergency() {
@@ -491,8 +425,6 @@
       document.getElementById('estopBtn').style.display = 'inline-block';
       document.getElementById('resetBtn').style.display = 'none';
       document.getElementById('emergencyBadge').style.display = 'none';
-      
-      setControlsEnabled(false);
       
       logLine('🔄 SISTEMA REINICIADO - Emergencia resetada');
       rpcCall('resetEmergency', {});
@@ -578,40 +510,32 @@ Posición: X=${systemState.position.x}, Y=${systemState.position.y}, Z=${systemS
 
     // Inicialización
     function initializePanel() {
-        // Obtener la IP automáticamente de la URL
-        function getServerIP() {
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                return 'localhost';
-            }
-            return window.location.hostname;
-        }
+      const serverIp = sessionStorage.getItem('server_ip');
+      const username = sessionStorage.getItem('username');
+      const privilege = sessionStorage.getItem('user_privilege');
+      const token = sessionStorage.getItem('auth_token');
 
-        const serverIp = getServerIP();
-        const username = sessionStorage.getItem('username');
-        const privilege = sessionStorage.getItem('user_privilege');
-        const token = sessionStorage.getItem('auth_token');
+      elements.ipPreview.textContent = serverIp || 'No configurado';
+      elements.usernamePreview.textContent = username || '—';
+      elements.privilegePreview.textContent = privilege || '—';
+      elements.tokenPreview.textContent = token ? `...${token.slice(-4)}` : '—';
 
-        elements.ipPreview.textContent = serverIp;
-        elements.usernamePreview.textContent = username || '—';
-        elements.privilegePreview.textContent = privilege || '—';
-        elements.tokenPreview.textContent = token ? `...${token.slice(-4)}` : '—';
+      // Configurar badges iniciales
+      updateBadge(elements.connected, 'Conexión: OK', 'on');
+      updateBadge(elements.motors, 'Motores: OFF', 'off');
+      updateBadge(elements.grip, 'Garra: OFF', 'off');
+      updateBadge(elements.remote, 'Remoto: ON', 'on');
+      updateBadge(elements.mode, 'Modo: ABS', 'on');
 
-        // Configurar badges iniciales
-        updateBadge(elements.connected, 'Conexión: OK', 'on');
-        updateBadge(elements.motors, 'Motores: OFF', 'off');
-        updateBadge(elements.grip, 'Garra: OFF', 'off');
-        updateBadge(elements.remote, 'Remoto: ON', 'on');
-        updateBadge(elements.mode, 'Modo: ABS', 'on');
+      logLine('🚀 Panel de administración inicializado');
+      logLine(`👤 Usuario: ${username} (${privilege})`);
+      logLine(`🌐 Servidor: ${serverIp}`);
 
-        logLine('🚀 Panel de administración inicializado');
-        logLine(`👤 Usuario: ${username} (${privilege})`);
-        logLine(`🌐 Servidor: ${serverIp}`);
-
-        // Simular conexión exitosa
-        setTimeout(() => {
-            systemState.connection = true;
-            logLine('✅ Conexión con el robot establecida');
-        }, 1000);
+      // Simular conexión exitosa
+      setTimeout(() => {
+        systemState.connection = true;
+        logLine('✅ Conexión con el robot establecida');
+      }, 1000);
     }
 
     // Event listeners
