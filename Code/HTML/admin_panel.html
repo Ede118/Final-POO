@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panel Servidor — Robot RRR</title>
+  <style>
+    :root{
+      --bg:#e8f6ff; --card:#ffffff; --line:#d0e6f7;
+      --text:#0b2638; --muted:#5d6b7a;
+      --primary:#0a6dd8; --primary-weak:#e6f2ff;
+      --danger:#b00020; --success:#2e7d32;
+      --warning:#f57c00;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:var(--bg); color:var(--text);
+    }
+    .container{max-width:1200px; margin:24px auto; padding:0 16px;}
+    h1{font-size:22px; margin:0 0 16px;}
+    .grid{display:grid; gap:16px;}
+    .g-2{grid-template-columns: 1fr 1fr;}
+    .g-3{grid-template-columns: 2fr 1fr;}
+    .card{
+      background:var(--card); border:1px solid var(--line); border-radius:12px;
+      padding:16px; box-shadow:0 1px 0 rgba(10,20,30,0.04);
+    }
+    .compact-card {
+      padding: 12px;
+      max-width: 300px;
+    }
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
+    .btn{
+      border:1px solid var(--primary); background:var(--primary-weak);
+      color:var(--primary); padding:8px 12px;
+      border-radius:8px; font-weight:600; cursor:pointer;
+      transition: all 0.2s ease;
+    }
+    .btn:hover{background:var(--primary); color:white;}
+    .btn-danger{border-color:var(--danger); color:#fff; background:var(--danger);}
+    .btn-danger:hover{background:#8a001a;}
+    .btn-success{border-color:var(--success); color:#fff; background:var(--success);}
+    .btn-success:hover{background:#1b5e20;}
+    .control-btn {transition: opacity 0.15s ease, transform 0.1s ease;}
+    .control-btn.btn-disabled {opacity: 0.35; cursor: not-allowed;}
+    .muted{color:var(--muted); font-size:12px;}
+    .badge{display:inline-block; padding:2px 8px; border-radius:999px;
+      background:#eef6ff; border:1px solid var(--line); font-size:12px;}
+    .badge.on{background:#e8f5e9; border-color:#c8e6c9; color:var(--success);}
+    .badge.off{background:#ffebee; border-color:#ffcdd2; color:var(--danger);}
+    .badge.warning{background:#fff3e0; border-color:#ffcc80; color:var(--warning);}
+    .badge.emergency{background:#ffebee; border-color:var(--danger); color:var(--danger); font-weight:700; animation: pulse 1.5s infinite;}
+    @keyframes pulse {0%{opacity:1;}50%{opacity:0.7;}100%{opacity:1;}}
+    .log{white-space:pre-wrap; background:#fff; border:1px solid var(--line);
+      border-radius:8px; padding:8px; height:200px; overflow:auto;
+      font-family:ui-monospace,Consolas,monospace; font-size:12px;}
+    .field { display:inline-block; margin-right:8px; }
+    .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px;}
+    .field input{padding:6px; border-radius:6px; border:1px solid var(--line); width:100px;}
+    .list > div { padding:6px 8px; border-bottom:1px solid #f0f5fb; }
+    .spacer{height:8px}
+    .footer{margin-top:16px; font-size:12px; color:var(--muted);}
+    .status-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0;}
+    .section-title {font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--text);}
+    .info-row {display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;}
+    .info-label {font-size: 11px; color: var(--muted);}
+    .info-value {font-size: 11px; font-weight: 600;}
+    .compact-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Panel Servidor — Robot RRR</h1>
+
+    <div class="compact-grid">
+      <section class="card compact-card">
+        <div class="section-title">Información de Sesión</div>
+        <div class="info-row">
+          <span class="info-label">Usuario:</span>
+          <span class="info-value" id="usernamePreview">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Privilegio:</span>
+          <span class="info-value" id="privilegePreview">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Token:</span>
+          <span class="info-value" id="tokenPreview">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Servidor:</span>
+          <span class="info-value" id="ipPreview">—</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">Estado del Sistema</div>
+        <div class="status-grid">
+          <div class="badge" id="connectionBadge">Conexión: <span id="connected">No</span></div>
+          <div class="badge" id="remoteBadge">Remoto: <span id="remote">ON</span></div>
+          <div class="badge" id="modeBadge">Modo: <span id="mode">ABS</span></div>
+          <div class="badge" id="emergencyBadge" style="display:none">EMERGENCIA</div>
+        </div>
+        <div class="status-grid">
+          <div class="badge">X: <span id="posx">0</span> mm</div>
+          <div class="badge">Y: <span id="posy">0</span> mm</div>
+          <div class="badge">Z: <span id="posz">0</span> mm</div>
+          <div class="badge" id="motorsBadge">Motores: <span id="motors">OFF</span></div>
+          <div class="badge" id="gripBadge">Garra: <span id="grip">OFF</span></div>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <button class="btn btn-danger" id="estopBtn" onclick="emergencyStop()">🛑 Parada Emergencia</button>
+          <button class="btn" id="resetBtn" style="display:none" onclick="resetEmergency()">🔄 Reset Emergencia</button>
+          <button class="btn" onclick="toggleRemote()" id="remoteToggleBtn">🔒 Deshab. Remoto</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid g-2" style="margin-top:16px;">
+      <section class="card">
+        <div class="section-title">Control Manual</div>
+        <div class="row">
+          <button class="btn control-btn" onclick="sendCommand('home')">🏠 Home (G28)</button>
+          <button class="btn control-btn" onclick="sendCommand('setAbs')">📍 ABS (G90)</button>
+          <button class="btn control-btn" onclick="sendCommand('setRel')">↗️ REL (G91)</button>
+          <button class="btn control-btn" id="motorBtn" onclick="toggleMotors()">⚙️ Motores</button>
+          <button class="btn control-btn" id="gripBtn" onclick="toggleGrip()">🦾 Garra</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          <div class="field"><label>X (mm)</label><input id="x" type="number" step="0.1" value="0"/></div>
+          <div class="field"><label>Y (mm)</label><input id="y" type="number" step="0.1" value="0"/></div>
+          <div class="field"><label>Z (mm)</label><input id="z" type="number" step="0.1" value="0"/></div>
+          <div class="field"><label>F (mm/min)</label><input id="f" type="number" step="1" value="1200"/></div>
+          <button class="btn control-btn" onclick="moveRobot()">🎯 Mover (G1)</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="section-title">Cola de Comandos</div>
+        <div class="list" id="queue"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">Gestión de Archivos</div>
+        <div class="row">
+          <input id="file" type="file" accept=".gcode,.txt" />
+          <button class="btn control-btn" id="uploadBtn" onclick="uploadFile()">📤 Subir</button>
+          <button class="btn control-btn" id="runBtn" onclick="runSelectedFile()">▶️ Ejecutar</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="list" id="files">
+          <div>jobs/caja.gcode</div>
+          <div>jobs/palet.gcode</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="section-title">Sistema de Aprendizaje</div>
+        <div class="row">
+          <button class="btn btn-success" onclick="startLearning()">📚 Iniciar Aprendizaje</button>
+          <button class="btn control-btn" onclick="stopLearning()">📕 Detener Aprendizaje</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid g-2" style="margin-top:16px;">
+      <section class="card">
+        <div class="section-title">Monitor del Sistema</div>
+        <div class="row">
+          <button class="btn" onclick="getSystemStatus()">🔄 Actualizar Estado</button>
+          <button class="btn" onclick="clearLog()">🗑️ Limpiar Log</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="log" id="log"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">Administración</div>
+        <div class="row">
+          <button class="btn" onclick="enableRemoteControl()">🌐 Hab. Control Remoto</button>
+          <button class="btn" onclick="disableRemoteControl()">🔒 Deshab. Control Remoto</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          <button class="btn" onclick="showSystemInfo()">ℹ️ Info Sistema</button>
+          <button class="btn" onclick="exportLog()">💾 Exportar Log</button>
+        </div>
+        <div style="margin-top:12px;">
+          <small class="muted">Última actualización: <span id="lastUpdate">—</span></small>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">Panel de Administración - Robot RRR</div>
+  </div>
+
+  <script>
+    // Estado global del sistema
+    let systemState = {
+      emergency: false,
+      remoteEnabled: true,
+      motorsOn: false,
+      gripperOn: false,
+      absoluteMode: true,
+      position: { x: 0, y: 0, z: 0 },
+      connection: false
+    };
+
+    // Elementos DOM
+    const elements = {
+      log: document.getElementById('log'),
+      queue: document.getElementById('queue'),
+      files: document.getElementById('files'),
+      tokenPreview: document.getElementById('tokenPreview'),
+      usernamePreview: document.getElementById('usernamePreview'),
+      privilegePreview: document.getElementById('privilegePreview'),
+      connected: document.getElementById('connected'),
+      mode: document.getElementById('mode'),
+      motors: document.getElementById('motors'),
+      grip: document.getElementById('grip'),
+      posx: document.getElementById('posx'),
+      posy: document.getElementById('posy'),
+      posz: document.getElementById('posz'),
+      ipPreview: document.getElementById('ipPreview'),
+      lastUpdate: document.getElementById('lastUpdate'),
+      remote: document.getElementById('remote')
+    };
+
+    // Utilidades
+    const controlButtons = document.querySelectorAll('.control-btn');
+
+    function setControlsEnabled(enabled) {
+      controlButtons.forEach(btn => {
+        btn.disabled = !enabled;
+        btn.classList.toggle('btn-disabled', !enabled);
+      });
+    }
+
+    function logLine(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      elements.log.textContent += `[${timestamp}] ${message}\n`;
+      elements.log.scrollTop = elements.log.scrollHeight;
+      elements.lastUpdate.textContent = new Date().toLocaleString();
+    }
+
+    function updateBadge(element, value, type = 'neutral') {
+      element.className = 'badge';
+      if (type === 'on') element.classList.add('on');
+      if (type === 'off') element.classList.add('off');
+      if (type === 'warning') element.classList.add('warning');
+      element.textContent = value;
+    }
+
+    function enqueueCommand(command) {
+      const item = document.createElement('div');
+      item.textContent = `→ ${command}`;
+      elements.queue.prepend(item);
+      
+      // Limitar cola a 20 elementos
+      if (elements.queue.children.length > 20) {
+        elements.queue.removeChild(elements.queue.lastChild);
+      }
+    }
+
+    // Sistema RPC
+    async function rpcCall(method, params = {}) {
+        // Obtener IP automáticamente de la URL
+        function getServerIP() {
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return 'localhost';
+            }
+            return window.location.hostname;
+        }
+        
+        const serverIp = getServerIP();
+        elements.ipPreview.textContent = serverIp;
+
+        if (!serverIp) {
+            logLine('❌ Error: No hay IP del servidor configurada');
+            return null;
+        }
+
+        const xmlBody = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>${method}</methodName>
+  <params>
+    <param><value><string>${JSON.stringify(params)}</string></value></param>
+  </params>
+</methodCall>`;
+
+        try {
+            logLine(`📤 Enviando: ${method}`);
+            const response = await fetch(`http://${serverIp}:8080`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/xml' },
+                body: xmlBody
+            });
+
+            const responseText = await response.text();
+            
+            if (responseText.includes('fault') || !response.ok) {
+                throw new Error(`Error en RPC: ${responseText}`);
+            }
+
+            logLine(`✅ ${method} ejecutado correctamente`);
+            return responseText;
+        } catch (error) {
+            logLine(`❌ Error en ${method}: ${error.message}`);
+            return null;
+        }
+    }
+
+    // Funciones de control del robot
+    function sendCommand(command) {
+      if (systemState.emergency) {
+        logLine('❌ Comando bloqueado - Sistema en emergencia');
+        return;
+      }
+
+      if (!systemState.remoteEnabled && ['move', 'motors', 'gripper'].includes(command)) {
+        logLine('❌ Control remoto deshabilitado');
+        return;
+      }
+
+      enqueueCommand(command);
+      rpcCall(command, {});
+    }
+
+    function moveRobot() {
+      if (systemState.emergency) {
+        logLine('❌ Movimiento bloqueado - Sistema en emergencia');
+        return;
+      }
+
+      const x = parseFloat(document.getElementById('x').value) || 0;
+      const y = parseFloat(document.getElementById('y').value) || 0;
+      const z = parseFloat(document.getElementById('z').value) || 0;
+      const f = parseFloat(document.getElementById('f').value) || 1200;
+
+      enqueueCommand(`G1 X${x} Y${y} Z${z} F${f}`);
+      rpcCall('move', { x, y, z, f });
+
+      // Actualizar UI local
+      elements.posx.textContent = x.toFixed(1);
+      elements.posy.textContent = y.toFixed(1);
+      elements.posz.textContent = z.toFixed(1);
+    }
+
+    function toggleMotors() {
+      const newState = !systemState.motorsOn;
+      systemState.motorsOn = newState;
+      elements.motors.textContent = newState ? 'ON' : 'OFF';
+      updateBadge(elements.motors, `Motores: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
+      
+      enqueueCommand(newState ? 'M17' : 'M18');
+      rpcCall('motors', { on: newState });
+    }
+
+    function toggleGrip() {
+      const newState = !systemState.gripperOn;
+      systemState.gripperOn = newState;
+      elements.grip.textContent = newState ? 'ON' : 'OFF';
+      updateBadge(elements.grip, `Garra: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
+      
+      enqueueCommand(newState ? 'M3' : 'M5');
+      rpcCall('gripper', { on: newState });
+    }
+
+    // Gestión de archivos
+    function uploadFile() {
+      const fileInput = document.getElementById('file');
+      if (!fileInput.files.length) {
+        alert('Por favor selecciona un archivo');
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const fileName = `jobs/${file.name}`;
+      
+      // Simular subida (en una implementación real aquí iría el código para subir el archivo)
+      const item = document.createElement('div');
+      item.textContent = fileName;
+      item.onclick = () => selectFile(item);
+      elements.files.appendChild(item);
+      
+      logLine(`📁 Archivo subido: ${fileName}`);
+      fileInput.value = '';
+    }
+
+    function selectFile(element) {
+      // Remover selección anterior
+      const previouslySelected = elements.files.querySelector('.selected');
+      if (previouslySelected) previouslySelected.classList.remove('selected');
+      
+      // Seleccionar nuevo
+      element.classList.add('selected');
+    }
+
+    function runSelectedFile() {
+      const selected = elements.files.querySelector('.selected');
+      if (!selected) {
+        alert('Por favor selecciona un archivo de la lista');
+        return;
+      }
+
+      const filePath = selected.textContent;
+      enqueueCommand(`Ejecutar: ${filePath}`);
+      rpcCall('runFile', { path: filePath });
+    }
+
+    // Sistema de aprendizaje
+    function startLearning() {
+      logLine('📚 Iniciando modo aprendizaje...');
+      rpcCall('startLearning', {});
+    }
+
+    function stopLearning() {
+      logLine('📕 Deteniendo modo aprendizaje...');
+      rpcCall('stopLearning', {});
+    }
+
+    // Control de emergencia
+    function emergencyStop() {
+      systemState.emergency = true;
+      systemState.motorsOn = false;
+      systemState.gripperOn = false;
+
+      document.getElementById('estopBtn').style.display = 'none';
+      document.getElementById('resetBtn').style.display = 'inline-block';
+      document.getElementById('emergencyBadge').style.display = 'inline-block';
+      
+      setControlsEnabled(false);
+
+      elements.queue.innerHTML = '<div>🛑 PARADA DE EMERGENCIA - COLA LIMPIADA</div>';
+      elements.motors.textContent = systemState.motorsOn ? 'ON' : 'OFF';
+      elements.grip.textContent = systemState.gripperOn ? 'ON' : 'OFF';
+      
+      updateBadge(elements.motors, `Motores: ${systemState.motorsOn ? 'ON' : 'OFF'}`, systemState.motorsOn ? 'on' : 'off');
+      updateBadge(elements.grip, `Garra: ${systemState.gripperOn ? 'ON' : 'OFF'}`, systemState.gripperOn ? 'on' : 'off');
+      
+      enqueueCommand(systemState.motorsOn ? 'M17' : 'M18');
+      enqueueCommand(systemState.gripperOn ? 'M3' : 'M5');
+      logLine('🛑 PARADA DE EMERGENCIA ACTIVADA');
+      
+      rpcCall('emergencyStop', { timestamp: new Date().toISOString() });
+      rpcCall('gripper', { on: systemState.gripperOn });
+      rpcCall('motors', { on: systemState.motorsOn });
+    }
+
+    function resetEmergency() {
+      systemState.emergency = false;
+      
+      document.getElementById('estopBtn').style.display = 'inline-block';
+      document.getElementById('resetBtn').style.display = 'none';
+      document.getElementById('emergencyBadge').style.display = 'none';
+      
+      setControlsEnabled(false);
+      
+      logLine('🔄 SISTEMA REINICIADO - Emergencia resetada');
+      rpcCall('resetEmergency', {});
+    }
+
+    // Control remoto
+    function toggleRemote() {
+      const newState = !systemState.remoteEnabled;
+      systemState.remoteEnabled = newState;
+      
+      elements.remote.textContent = newState ? 'ON' : 'OFF';
+      updateBadge(elements.remote, `Remoto: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
+      
+      document.getElementById('remoteToggleBtn').textContent = 
+        newState ? '🔒 Deshab. Remoto' : '🌐 Hab. Remoto';
+      
+      logLine(newState ? '🌐 Control remoto habilitado' : '🔒 Control remoto deshabilitado');
+      rpcCall(newState ? 'enableRemote' : 'disableRemote', {});
+    }
+
+    function enableRemoteControl() {
+      systemState.remoteEnabled = true;
+      elements.remote.textContent = 'ON';
+      updateBadge(elements.remote, 'Remoto: ON', 'on');
+      rpcCall('enableRemote', {});
+      logLine('🌐 Control remoto habilitado');
+    }
+
+    function disableRemoteControl() {
+      systemState.remoteEnabled = false;
+      elements.remote.textContent = 'OFF';
+      updateBadge(elements.remote, 'Remoto: OFF', 'off');
+      rpcCall('disableRemote', {});
+      logLine('🔒 Control remoto deshabilitado');
+    }
+
+    // Utilidades del sistema
+    function getSystemStatus() {
+      logLine('🔄 Solicitando estado del sistema...');
+      rpcCall('getEstado', {})
+        .then(response => {
+          if (response) {
+            logLine('✅ Estado del sistema actualizado');
+          }
+        });
+    }
+
+    function clearLog() {
+      if (confirm('¿Estás seguro de que quieres limpiar el log?')) {
+        elements.log.textContent = '';
+        logLine('🗑️ Log limpiado');
+      }
+    }
+
+    function showSystemInfo() {
+      const info = `
+🤖 Robot RRR - Información del Sistema
+-----------------------------------
+Usuario: ${sessionStorage.getItem('username') || 'No identificado'}
+Privilegio: ${sessionStorage.getItem('user_privilege') || 'No definido'}
+Servidor: ${sessionStorage.getItem('server_ip') || 'No configurado'}
+Token: ${sessionStorage.getItem('auth_token') || 'No disponible'}
+Modo: ${systemState.absoluteMode ? 'Absoluto (G90)' : 'Relativo (G91)'}
+Motores: ${systemState.motorsOn ? 'ENCENDIDOS' : 'APAGADOS'}
+Garra: ${systemState.gripperOn ? 'ACTIVADA' : 'DESACTIVADA'}
+Posición: X=${systemState.position.x}, Y=${systemState.position.y}, Z=${systemState.position.z}
+      `.trim();
+      
+      logLine(info);
+    }
+
+    function exportLog() {
+      const logContent = elements.log.textContent;
+      const blob = new Blob([logContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `robot-log-${new Date().toISOString().split('T')[0]}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logLine('💾 Log exportado correctamente');
+    }
+
+    // Inicialización
+    function initializePanel() {
+        // Obtener la IP automáticamente de la URL
+        function getServerIP() {
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return 'localhost';
+            }
+            return window.location.hostname;
+        }
+
+        const serverIp = getServerIP();
+        const username = sessionStorage.getItem('username');
+        const privilege = sessionStorage.getItem('user_privilege');
+        const token = sessionStorage.getItem('auth_token');
+
+        elements.ipPreview.textContent = serverIp;
+        elements.usernamePreview.textContent = username || '—';
+        elements.privilegePreview.textContent = privilege || '—';
+        elements.tokenPreview.textContent = token ? `...${token.slice(-4)}` : '—';
+
+        // Configurar badges iniciales
+        updateBadge(elements.connected, 'Conexión: OK', 'on');
+        updateBadge(elements.motors, 'Motores: OFF', 'off');
+        updateBadge(elements.grip, 'Garra: OFF', 'off');
+        updateBadge(elements.remote, 'Remoto: ON', 'on');
+        updateBadge(elements.mode, 'Modo: ABS', 'on');
+
+        logLine('🚀 Panel de administración inicializado');
+        logLine(`👤 Usuario: ${username} (${privilege})`);
+        logLine(`🌐 Servidor: ${serverIp}`);
+
+        // Simular conexión exitosa
+        setTimeout(() => {
+            systemState.connection = true;
+            logLine('✅ Conexión con el robot establecida');
+        }, 1000);
+    }
+
+    // Event listeners
+    window.addEventListener('load', initializePanel);
+
+    // Prevenir navegación accidental
+    window.addEventListener('beforeunload', (e) => {
+      if (systemState.motorsOn || systemState.gripperOn) {
+        e.preventDefault();
+        e.returnValue = 'El robot está en operación. ¿Estás seguro de que quieres salir?';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,54 +1,39 @@
-CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic -MMD -MP -ICode/include -ICode/include/XML -pthread
-LDFLAGS :=
-SERVER_LDLIBS := -pthread -lsqlite3 -lcrypto
-CLIENT_LDLIBS := -pthread
+# ---------- Configuración básica ----------
+CXX      := g++
+INCDIR   := inc
+SRCDIR   := src
+OBJDIR   := build
+BIN_DIR  := bin
+TARGET   := $(BIN_DIR)/servidor
 
-SRC_DIR := Code/src
-BUILD_DIR := Code/build
-BIN_DIR := Code
+CXXFLAGS := -std=c++17 -Wall -Wextra -g -I$(INCDIR)
+LDFLAGS  := -lsqlite3
 
-XML_SOURCES := $(wildcard $(SRC_DIR)/XML/*.cpp)
-XML_OBJECTS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(XML_SOURCES))
+# ---------- Fuentes y objetos (automático por carpeta) ----------
+# Todos los .cpp que haya en src/
+SRCS := $(wildcard $(SRCDIR)/*.cpp)
 
-SERVER_OBJECTS := \
-	$(XML_OBJECTS) \
-	$(BUILD_DIR)/app/AppServer.o \
-	$(BUILD_DIR)/app/AuthService.o \
-	$(BUILD_DIR)/app/Logger.o \
-	$(BUILD_DIR)/app/PasswordHasher.o \
-	$(BUILD_DIR)/app/RobotController.o \
-	$(BUILD_DIR)/app/RPCAuthLogin.o \
-	$(BUILD_DIR)/app/StorageService.o \
-	$(BUILD_DIR)/app/TokenService.o \
-	$(BUILD_DIR)/app/server.o
+# Por cada src/xxx.cpp -> build/xxx.o
+OBJS := $(SRCS:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 
-CLIENT_OBJECTS := \
-	$(XML_OBJECTS) \
-	$(BUILD_DIR)/app/clientcmd.o
+# ---------- Reglas principales ----------
+all: $(TARGET)
 
-SERVER_BIN := $(BIN_DIR)/server
-CLIENT_BIN := $(BIN_DIR)/client
+$(TARGET): $(OBJS) | $(BIN_DIR)
+	$(CXX) $(OBJS) $(LDFLAGS) -o $@
 
-.PHONY: all clean server client
-
-all: $(SERVER_BIN) $(CLIENT_BIN)
-
-server: $(SERVER_BIN)
-
-client: $(CLIENT_BIN)
-
-$(SERVER_BIN): $(SERVER_OBJECTS)
-	$(CXX) $(LDFLAGS) $^ -o $@ $(SERVER_LDLIBS)
-
-$(CLIENT_BIN): $(CLIENT_OBJECTS)
-	$(CXX) $(LDFLAGS) $^ -o $@ $(CLIENT_LDLIBS)
-
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
-	@mkdir -p $(dir $@)
+# Compilar cada .cpp a .o (en build/)
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-clean:
-	rm -rf $(BUILD_DIR) $(SERVER_BIN) $(CLIENT_BIN)
+# Crear directorios si no existen
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
 
--include $(SERVER_OBJECTS:.o=.d) $(CLIENT_OBJECTS:.o=.d)
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+# ---------- Limpieza ----------
+.PHONY: clean
+clean:
+	rm -rf $(OBJDIR) $(BIN_DIR)

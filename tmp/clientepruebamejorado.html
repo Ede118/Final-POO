@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cliente Robot RRR</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        input, button { padding: 10px; margin: 5px; border-radius: 5px; }
+        input { width: 200px; border: 1px solid #ddd; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #2d3748; color: white; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .log { background: #1a202c; color: #a0aec0; padding: 10px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🤖 Cliente Robot RRR</h2>
+        
+        <div>
+            <input type="text" id="serverIp" value="10.68.6.63" placeholder="IP del servidor">
+            <button onclick="probarConexion()">Probar Conexión</button>
+        </div>
+        
+        <div style="margin: 15px 0;">
+            <button onclick="sumar(3, 4)">Sumar(3,4)</button>
+            <button onclick="sumar(10, 5)">Sumar(10,5)</button>
+        </div>
+
+        <h4>Respuesta:</h4>
+        <pre id="respuesta">Esperando...</pre>
+        
+        <h4>Log:</h4>
+        <div class="log" id="log"></div>
+    </div>
+
+<script>
+function log(mensaje) {
+    const logElement = document.getElementById('log');
+    const timestamp = new Date().toLocaleTimeString();
+    logElement.innerHTML = `[${timestamp}] ${mensaje}<br>` + logElement.innerHTML;
+}
+
+function getServerUrl() {
+    const ip = document.getElementById('serverIp').value.trim();
+    return `http://${ip}:8080`;
+}
+
+async function enviarSuma(a, b) {
+    const xml = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>sumar</methodName>
+  <params>
+    <param><value><int>${a}</int></value></param>
+    <param><value><int>${b}</int></value></param>
+  </params>
+</methodCall>`;
+
+    log(`Enviando: sumar(${a}, ${b})`);
+
+    try {
+        const response = await fetch(getServerUrl(), {
+            method: "POST",
+            headers: { "Content-Type": "text/xml" },
+            body: xml
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+
+        const texto = await response.text();
+        document.getElementById("respuesta").textContent = texto;
+        log(`✅ Respuesta: ${texto}`);
+
+    } catch (error) {
+        document.getElementById("respuesta").textContent = "Error: " + error.message;
+        log(`❌ Error: ${error.message}`);
+    }
+}
+
+function probarConexion() {
+    log("Probando conexión...");
+    enviarSuma(1, 1);  // Usamos suma para probar
+}
+
+function sumar(a, b) {
+    enviarSuma(a, b);
+}
+
+// Inicialización
+window.addEventListener('load', () => {
+    log("Cliente listo. Configura IP y prueba conexión.");
+});
+</script>
+</body>
+</html>
