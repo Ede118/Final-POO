@@ -6,6 +6,8 @@
 #include <string>
 #include <random>
 #include <iostream>
+#include <unordered_map>
+#include <mutex>
 
 class Login {
 private:
@@ -31,6 +33,8 @@ public:
 
     bool isConnected() const;
     AuthResult authenticate(const std::string& username, const std::string& password);
+    // Devuelve el nombre de usuario asociado a un token activo, o cadena vacía
+    std::string usernameForToken(const std::string& token);
 };
 
 #endif

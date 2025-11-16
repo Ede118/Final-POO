@@ -1,7 +1,11 @@
 #include "login.h"
+#include "logger.h"
 #include <sqlite3.h>
 #include <iostream>
 #include <string>
+// storage for tokens
+static std::unordered_map<std::string, std::string> tokens;
+static std::mutex token_mtx;
 
 Login::Login() {
     std::cout << "🔌 Conectando a base de datos SQLite..." << std::endl;
@@ -106,15 +110,29 @@ Login::AuthResult Login::authenticate(const std::string& username, const std::st
         result.success = true;
         result.privilege = privilege ? privilege : "viewer";
         result.token = generateToken();
+        // Guardar token activo -> usuario
+        {
+            std::lock_guard<std::mutex> l(token_mtx);
+            tokens[result.token] = username;
+        }
         result.message = "Login exitoso";
         std::cout << "✅ Login exitoso - Usuario: " << username << ", Privilegio: " << result.privilege << std::endl;
+        logger.logEvent("auth", std::string("Login exitoso usuario:") + username + std::string(" privilegio:") + result.privilege);
     } else {
         // USUARIO INVÁLIDO - no existe o credenciales incorrectas
         std::cout << "❌ Login fallido - Usuario: " << username << " no encontrado o password incorrecto" << std::endl;
         result.success = false;
         result.message = "Usuario o contraseña incorrectos";
+        logger.logEvent("auth", std::string("Login fallido usuario:") + username);
     }
 
     sqlite3_finalize(stmt);
     return result;
+}
+
+std::string Login::usernameForToken(const std::string& token) {
+    std::lock_guard<std::mutex> l(token_mtx);
+    auto it = tokens.find(token);
+    if (it != tokens.end()) return it->second;
+    return std::string();
 }

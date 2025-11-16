@@ -1,0 +1,55 @@
+timestamp,category,detail,user,node,response_code,module,message
+"2025-11-16T02:51:00","event",,,,,"server","Iniciando servidor"
+"2025-11-16T02:51:21","event",,,,,"server","Iniciando servidor"
+"2025-11-16T02:51:36","request","GET /server_panel.html","-","127.0.0.1",404,,,
+"2025-11-16T02:51:37","request","GET /server_panel.html","-","127.0.0.1",404,,,
+"2025-11-16T02:51:38","request","GET /server_panel.html","-","127.0.0.1",404,,,
+"2025-11-16T02:51:41","request","OPTIONS /","-","127.0.0.1",200,,,
+"2025-11-16T02:51:41","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T02:51:41","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:51:43","request","GET /server_panel.html","-","127.0.0.1",404,,,
+"2025-11-16T02:51:57","request","GET /server_panel.html","-","127.0.0.1",404,,,
+"2025-11-16T02:52:14","request","GET /","-","127.0.0.1",404,,,
+"2025-11-16T02:52:16","request","GET /","-","127.0.0.1",404,,,
+"2025-11-16T02:52:16","request","GET /","-","127.0.0.1",404,,,
+"2025-11-16T02:52:21","request","OPTIONS /","-","127.0.0.1",200,,,
+"2025-11-16T02:52:21","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T02:52:21","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:52:23","request","GET /server_panel.html","-","127.0.0.1",404,,,
+"2025-11-16T02:52:28","request","OPTIONS /","-","127.0.0.1",200,,,
+"2025-11-16T02:52:28","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T02:52:28","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:52:30","request","GET /server_panel.html","-","127.0.0.1",404,,,
+"2025-11-16T02:53:03","request","GET /","-","127.0.0.1",404,,,
+"2025-11-16T02:53:07","request","GET /","-","127.0.0.1",404,,,
+"2025-11-16T02:53:55","event",,,,,"server","Iniciando servidor"
+"2025-11-16T02:54:37","event",,,,,"server","Iniciando servidor"
+"2025-11-16T02:54:37","request","GET /","-","127.0.0.1",200,,,
+"2025-11-16T02:55:04","event",,,,,"server","Iniciando servidor"
+"2025-11-16T02:55:11","event",,,,,"server","Iniciando servidor"
+"2025-11-16T02:55:47","event",,,,,"server","Iniciando servidor"
+"2025-11-16T02:56:08","request","GET /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:11","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T02:56:11","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:13","request","GET /server_panel.html","-","127.0.0.1",200,,,
+"2025-11-16T02:56:16","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:17","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:17","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:18","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:18","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:19","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:20","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:22","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:56:23","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:57:20","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:57:21","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:57:43","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T02:57:44","request","POST /","-","127.0.0.1",200,,,
+"2025-11-16T03:01:36","event",,,,,"server","Iniciando servidor"
+"2025-11-16T03:01:39","request","GET /server_panel.html","-","127.0.0.1",200,,,
+"2025-11-16T03:01:42","request","POST / gripper","ADMIN","127.0.0.1",200,,,
+"2025-11-16T03:01:43","request","POST / home","ADMIN","127.0.0.1",200,,,
+"2025-11-16T03:01:45","request","POST / motors","ADMIN","127.0.0.1",200,,,
+"2025-11-16T03:01:45","request","POST / motors","ADMIN","127.0.0.1",200,,,
+"2025-11-16T03:01:46","request","POST / gripper","ADMIN","127.0.0.1",200,,,
+"2025-11-16T03:01:47","request","POST / home","ADMIN","127.0.0.1",200,,,

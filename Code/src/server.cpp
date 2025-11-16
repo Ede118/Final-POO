@@ -401,3 +401,180 @@ void Server::parseHttpRequest(const std::string& request, std::string& method, s
     std::istringstream iss(request);
     iss >> method >> path;
 }
+
+int main() {
+    std::cout << "🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)" << std::endl;
+
+    Login login;
+    if(!login.isConnected()) return 1;
+
+    EstadoRobot estado;
+    ComunicacionControladorSimple comm("/dev/ttyUSB0", B19200);
+    Aprendizaje aprendizaje;
+    AdministradorSistema admin;
+    RobotControllerSimple robot(comm, estado);
+    robot.setAprendizaje(&aprendizaje);
+
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in address{}; 
+    address.sin_family = AF_INET; 
+    address.sin_addr.s_addr = INADDR_ANY; 
+    address.sin_port = htons(8080);
+    
+    // Permitir reuso del puerto
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    
+    if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
+        std::cerr << "❌ ERROR bind: " << strerror(errno) << std::endl;
+        return 1;
+    }
+    
+    listen(server_fd, 5);
+    std::cout << "🚀 Servidor escuchando en puerto 8080" << std::endl;
+
+    while(true) {
+        int client_fd = accept(server_fd, nullptr, nullptr);
+        char buffer[8192] = {0};
+        ssize_t n = read(client_fd, buffer, sizeof(buffer) - 1);
+        
+        if(n > 0) {
+            std::string req(buffer);
+            std::string method, path;
+            parseHttpRequest(req, method, path);
+            
+            std::cout << "🌐 SOLICITUD: " << method << " " << path << std::endl;
+
+            std::string respuestaHttp;
+            
+            if (method == "GET") {
+                respuestaHttp = serveStaticFile(path);
+            } 
+            else if (method == "OPTIONS") {
+                respuestaHttp = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: 0\r\n\r\n";
+            }
+            else if (method == "POST") {
+                        size_t body_pos = req.find("\r\n\r\n");
+                        if (body_pos != std::string::npos) {
+                            std::string body = req.substr(body_pos + 4);
+
+                            // Si la ruta es /upload -> guardar CSV, convertir a .gcode y ejecutar
+                            if (path.rfind("/upload", 0) == 0) {
+                                try {
+                                    // Extraer nombre de archivo desde query ?name=...
+                                    std::string filename = "uploaded.csv";
+                                    auto qpos = path.find('?');
+                                    if (qpos != std::string::npos) {
+                                        std::string query = path.substr(qpos + 1);
+                                        // buscar name=
+                                        auto npos = query.find("name=");
+                                        if (npos != std::string::npos) {
+                                            filename = query.substr(npos + 5);
+                                            // decode simple %20 etc.
+                                            auto urlDecode = [](std::string s){
+                                                std::string out; out.reserve(s.size());
+                                                for (size_t i=0;i<s.size();++i) {
+                                                    if (s[i]=='%' && i+2<s.size()) {
+                                                        std::string hex = s.substr(i+1,2);
+                                                        char c = (char) strtol(hex.c_str(), nullptr, 16);
+                                                        out.push_back(c); i+=2;
+                                                    } else if (s[i]=='+') out.push_back(' ');
+                                                    else out.push_back(s[i]);
+                                                }
+                                                return out;
+                                            };
+                                            filename = urlDecode(filename);
+                                        }
+                                    }
+
+                                    // Sanear filename: quitar directorios
+                                    size_t lastSlash = filename.find_last_of("/\\");
+                                    if (lastSlash != std::string::npos) filename = filename.substr(lastSlash+1);
+
+                                    namespace fs = std::filesystem;
+                                    fs::create_directories("uploads");
+                                    fs::create_directories("jobs");
+
+                                    fs::path csvpath = fs::path("uploads") / filename;
+                                    // Guardar CSV crudo
+                                    std::ofstream fout(csvpath, std::ios::out | std::ios::binary);
+                                    fout << body;
+                                    fout.close();
+
+                                    // Convertir CSV a GCODE (.gcode)
+                                    std::ifstream fin(csvpath);
+                                    std::string base = filename;
+                                    // quitar extension .csv
+                                    auto posdot = base.find_last_of('.');
+                                    if (posdot != std::string::npos) base = base.substr(0,posdot);
+                                    fs::path gcodepath = fs::path("jobs") / (base + ".gcode");
+                                    std::ofstream gout(gcodepath, std::ios::out | std::ios::trunc);
+                                    if (fin && gout) {
+                                        std::string line;
+                                        bool first = true;
+                                        while (std::getline(fin, line)) {
+                                            if (first) { first = false; continue; } // saltar header
+                                            // trim
+                                            auto l = line;
+                                            while (!l.empty() && (l.back()=='\r' || l.back()=='\n')) l.pop_back();
+                                            if (l.size()>=2 && l.front()=='"' && l.back()=='"') {
+                                                l = l.substr(1, l.size()-2);
+                                                // des-escape ""
+                                                std::string tmp; tmp.reserve(l.size());
+                                                for (size_t i=0;i<l.size();++i) {
+                                                    if (l[i]=='"' && i+1<l.size() && l[i+1]=='"') { tmp.push_back('"'); ++i; }
+                                                    else tmp.push_back(l[i]);
+                                                }
+                                                l = tmp;
+                                            }
+                                            if (!l.empty()) gout << l << "\n";
+                                        }
+                                        gout.close();
+                                        fin.close();
+
+                                        // No ejecutar automáticamente: guardar el GCODE y devolver ruta.
+                                        std::ostringstream out;
+                                        std::string ok = std::string("Archivo subido: ") + gcodepath.string();
+                                        out << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << ok.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << ok;
+                                        respuestaHttp = out.str();
+                                    } else {
+                                        std::string err = "Error al convertir CSV a GCODE";
+                                        std::ostringstream out; out << "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: " << err.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << err;
+                                        respuestaHttp = out.str();
+                                    }
+                                } catch (const std::exception& e) {
+                                    std::string err = std::string("Exception: ") + e.what();
+                                    std::ostringstream out; out << "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: " << err.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << err;
+                                    respuestaHttp = out.str();
+                                }
+                            } else {
+                                std::string resp = procesarRPC(body, login, robot, estado, aprendizaje, admin);
+                        
+                                std::ostringstream out;
+                                out << "HTTP/1.1 200 OK\r\n"
+                                    << "Access-Control-Allow-Origin: *\r\n"
+                                    << "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+                                    << "Access-Control-Allow-Headers: Content-Type\r\n"
+                                    << "Content-Type: text/xml\r\n"
+                                    << "Content-Length: " << resp.size() << "\r\n"
+                                    << "\r\n"
+                                    << resp;
+                                respuestaHttp = out.str();
+                            }
+                        }
+            }
+            
+            if (!respuestaHttp.empty()) {
+                write(client_fd, respuestaHttp.c_str(), respuestaHttp.size());
+                std::cout << "✅ RESPUESTA ENVIADA (" << respuestaHttp.size() << " bytes)" << std::endl;
+            } else {
+                std::string error = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\n\r\n404 Not Found";
+                write(client_fd, error.c_str(), error.size());
+                std::cout << "❌ ENVIADO 404" << std::endl;
+            }
+        }
+        close(client_fd);
+        std::cout << "----------------------------------------" << std::endl;
+    }
+    return 0;
+}
