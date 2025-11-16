@@ -257,7 +257,7 @@
     }
 
     // Sistema RPC
-    async function rpcCall(method, params = {}) {
+  async function rpcCall(method, params = {}) {
       const serverIp = sessionStorage.getItem('server_ip');
       elements.ipPreview.textContent = serverIp || 'No configurado';
 
@@ -266,7 +266,15 @@
         return null;
       }
 
-      const xmlBody = `<?xml version="1.0"?>
+        // Añadir información de sesión (usuario/token) automáticamente
+        try {
+            const tok = sessionStorage.getItem('auth_token');
+            const user = sessionStorage.getItem('username');
+            if (tok) params.token = tok;
+            if (user) params.user = user;
+        } catch (e) { /* ignore */ }
+
+        const xmlBody = `<?xml version="1.0"?>
 <methodCall>
   <methodName>${method}</methodName>
   <params>

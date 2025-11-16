@@ -1,0 +1,23 @@
+🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)
+🔌 Conectando a base de datos SQLite...
+✅ Conectado a SQLite correctamente
+✅ Tabla 'users' verificada/creada
+📊 Usuarios en BD: 3
+❌ No se pudo abrir /dev/ttyUSB0: No such file or directory
+📝 Modo simulación activado
+🤖 RobotControllerSimple inicializado
+🚀 Servidor escuchando en puerto 8080
+🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)
+🔌 Conectando a base de datos SQLite...
+✅ Conectado a SQLite correctamente
+✅ Tabla 'users' verificada/creada
+📊 Usuarios en BD: 3
+❌ No se pudo abrir /dev/ttyUSB0: No such file or directory
+📝 Modo simulación activado
+🤖 RobotControllerSimple inicializado
+🚀 Servidor escuchando en puerto 8080
+🌐 SOLICITUD: GET / desde 127.0.0.1
+📁 SOLICITUD DE ARCHIVO: /
+📁 Sirviendo archivo: ./HTML/signin.html (desde: ./HTML)
+✅ RESPUESTA ENVIADA (9465 bytes)
+----------------------------------------

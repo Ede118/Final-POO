@@ -275,7 +275,7 @@
     }
 
     // Sistema RPC
-    async function rpcCall(method, params = {}) {
+  async function rpcCall(method, params = {}) {
         // Obtener IP automáticamente de la URL
         function getServerIP() {
             if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -291,6 +291,14 @@
             logLine('❌ Error: No hay IP del servidor configurada');
             return null;
         }
+
+        // Añadir información de sesión (usuario/token) automáticamente
+        try {
+            const tok = sessionStorage.getItem('auth_token');
+            const user = sessionStorage.getItem('username');
+            if (tok) params.token = tok;
+            if (user) params.user = user;
+        } catch (e) { /* ignore */ }
 
         const xmlBody = `<?xml version="1.0"?>
 <methodCall>

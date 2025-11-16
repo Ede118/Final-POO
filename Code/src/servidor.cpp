@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <chrono>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include "login.h"
 #include "robot_controller_simple.h"
@@ -14,6 +15,7 @@
 #include "aprendizaje.h"
 #include "administrador_sistema.h"
 #include "json.hpp"
+#include "logger.h"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -78,7 +80,8 @@ std::string serveStaticFile(const std::string& requestPath) {
 
     // Buscamos primero en la carpeta del cliente (relativa a Code/Server): ../Client/HTML
     std::string clientBase = "../Client/HTML";
-    std::string serverBase = "."; // carpeta actual del servidor (Code/Server)
+    std::string serverBase = "."; // carpeta actual del servidor (Code)
+    std::string serverHtmlBase = "./HTML"; // carpeta HTML dentro de Code/
 
     std::string relpath;
     if (requestPath == "/" || requestPath == "/index.html") relpath = "/signin.html";
@@ -86,6 +89,7 @@ std::string serveStaticFile(const std::string& requestPath) {
 
     fs::path clientPath = fs::path(clientBase) / relpath.substr(1);
     fs::path serverPath = fs::path(serverBase) / relpath.substr(1);
+    fs::path serverHtmlPath = fs::path(serverHtmlBase) / relpath.substr(1);
 
     std::string filepath;
     std::string servedFrom;
@@ -95,6 +99,9 @@ std::string serveStaticFile(const std::string& requestPath) {
         if (fs::exists(clientPath) && fs::is_regular_file(clientPath)) {
             filepath = clientPath.string();
             servedFrom = clientBase;
+        } else if (fs::exists(serverHtmlPath) && fs::is_regular_file(serverHtmlPath)) {
+            filepath = serverHtmlPath.string();
+            servedFrom = serverHtmlBase;
         } else if (fs::exists(serverPath) && fs::is_regular_file(serverPath)) {
             filepath = serverPath.string();
             servedFrom = serverBase;
@@ -348,7 +355,7 @@ void parseHttpRequest(const std::string& request, std::string& method, std::stri
 
 int main() {
     std::cout << "🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)" << std::endl;
-
+    logger.logEvent("server", "Iniciando servidor");
     Login login;
     if(!login.isConnected()) return 1;
 
@@ -378,16 +385,24 @@ int main() {
     std::cout << "🚀 Servidor escuchando en puerto 8080" << std::endl;
 
     while(true) {
-        int client_fd = accept(server_fd, nullptr, nullptr);
+        sockaddr_in client_addr{};
+        socklen_t addrlen = sizeof(client_addr);
+        int client_fd = accept(server_fd, (sockaddr*)&client_addr, &addrlen);
         char buffer[8192] = {0};
         ssize_t n = read(client_fd, buffer, sizeof(buffer) - 1);
         
+        std::string requestBody;
         if(n > 0) {
             std::string req(buffer);
             std::string method, path;
             parseHttpRequest(req, method, path);
             
-            std::cout << "🌐 SOLICITUD: " << method << " " << path << std::endl;
+            std::string clientNode = "-";
+            if (addrlen == sizeof(client_addr)) {
+                clientNode = std::string(inet_ntoa(client_addr.sin_addr));
+            }
+
+            std::cout << "🌐 SOLICITUD: " << method << " " << path << " desde " << clientNode << std::endl;
 
             std::string respuestaHttp;
             
@@ -401,6 +416,7 @@ int main() {
                         size_t body_pos = req.find("\r\n\r\n");
                         if (body_pos != std::string::npos) {
                             std::string body = req.substr(body_pos + 4);
+                            requestBody = body;
 
                             // Si la ruta es /upload -> guardar CSV, convertir a .gcode y ejecutar
                             if (path.rfind("/upload", 0) == 0) {
@@ -508,14 +524,53 @@ int main() {
                         }
             }
             
+            int response_code = 0;
             if (!respuestaHttp.empty()) {
+                // write response
                 write(client_fd, respuestaHttp.c_str(), respuestaHttp.size());
                 std::cout << "✅ RESPUESTA ENVIADA (" << respuestaHttp.size() << " bytes)" << std::endl;
+                size_t pos = respuestaHttp.find("HTTP/1.1 ");
+                if (pos != std::string::npos) {
+                    size_t start = pos + 9; // after "HTTP/1.1 "
+                    size_t end = respuestaHttp.find(' ', start);
+                    if (end != std::string::npos) {
+                        try { response_code = std::stoi(respuestaHttp.substr(start, end - start)); } catch(...) { response_code = 0; }
+                    }
+                }
             } else {
                 std::string error = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\n\r\n404 Not Found";
                 write(client_fd, error.c_str(), error.size());
                 std::cout << "❌ ENVIADO 404" << std::endl;
+                response_code = 404;
             }
+
+            // Intentar extraer información del RPC (método y usuario/token)
+            std::string rpcMethod = "";
+            std::string userForLog = "-";
+            if (!requestBody.empty()) {
+                size_t s = requestBody.find("<methodName>"), e = requestBody.find("</methodName>");
+                if (s != std::string::npos && e != std::string::npos) {
+                    rpcMethod = requestBody.substr(s + 12, e - (s + 12));
+                }
+                // intentar parsear JSON param y buscar user o token
+                nlohmann::json j;
+                if (extractJsonParam(requestBody, j)) {
+                    if (j.contains("user")) userForLog = j.value("user", std::string("-"));
+                    else if (j.contains("token")) {
+                        std::string tok = j.value("token", std::string());
+                        if (!tok.empty()) {
+                            std::string uname = login.usernameForToken(tok);
+                            if (!uname.empty()) userForLog = uname;
+                        }
+                    }
+                }
+            }
+
+            std::string detail = method + std::string(" ") + path;
+            if (!rpcMethod.empty()) detail += std::string(" ") + rpcMethod;
+
+            // Registrar petición en el log (usuario si se pudo averiguar)
+            logger.logRequest(detail, userForLog, clientNode, response_code);
         }
         close(client_fd);
         std::cout << "----------------------------------------" << std::endl;
