@@ -2,13 +2,25 @@
 #include <string>
 #include <sstream>
 #include <regex>
+#include <cctype>
+#include <algorithm>
+#include <iomanip>
+#include <ctime>
 #include <fstream>
 #include <filesystem>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <cstdlib>
 #include <thread>
 #include <chrono>
+#include <unordered_map>
+#include <functional>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <atomic>
+#include <cmath>
 
 #include "login.h"
 #include "robot_controller_simple.h"
@@ -21,388 +33,299 @@
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+const std::chrono::seconds kClosingGrace(5);
+const std::chrono::milliseconds kRequestDedupWindow(350);
 
-std::string toString(ServerState s) {
-    switch (s) {
-        case ServerState::STABLE: return "STABLE";
-        case ServerState::BUSY:   return "BUSY";
-        case ServerState::ERROR:  return "ERROR";
+struct CommandContext {
+    Server& server;
+    bool& running;
+    bool& closing;
+    int* listenFd;
+    std::atomic<bool>* closingServed;
+    Login* login;
+    RobotControllerSimple* robot;
+    EstadoRobot* estado;
+    Aprendizaje* aprendizaje;
+    AdministradorSistema* admin;
+};
+
+using CommandFn = std::function<std::string(const std::string&, CommandContext&)>;
+
+std::string trimCopy(const std::string& s) {
+    auto isSpace = [](unsigned char c){ return std::isspace(c); };
+    auto begin = std::find_if_not(s.begin(), s.end(), isSpace);
+    auto end = std::find_if_not(s.rbegin(), s.rend(), isSpace).base();
+    if (begin >= end) return "";
+    return std::string(begin, end);
+}
+
+std::string toLowerCopy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
+    return s;
+}
+
+bool parseOnOffToken(const std::string& token, bool& value) {
+    auto t = toLowerCopy(token);
+    if (t == "on" || t == "encender" || t == "enable" || t == "activar") {
+        value = true;
+        return true;
     }
-    return "UNKNOWN";
-}
-
-void Server::press_enter(bool flag) {
-    if (flag){
-        std::string dummy;
-        std::getline(std::cin, dummy);  // Bloquea hasta ENTER
-        std::system("clear");
-    } else{
-        std::string dummy;
-        std::getline(std::cin, dummy);  // Bloquea hasta ENTER
-    }
-}
-
-void Server::pause_sec(int s) {
-    std::this_thread::sleep_for(std::chrono::seconds(s));
-}
-
-
-bool Server::parseCleanFlag(int argc, char* argv[]) {
-    bool clean = false;
-    const std::string key = "--cleanterminal=";
-
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg.rfind(key, 0) == 0) { 
-            std::string value = arg.substr(key.size());
-            if (value == "y" || value == "yes" || value == "1") {
-                clean = true;
-            }
-        }
-    }
-    return clean;
-}
-
-
-
-// [Las funciones auxiliares igual que antes...]
-bool Server::endsWith(const std::string& str, const std::string& suffix) {
-    if (suffix.size() > str.size()) return false;
-    return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
-}
-
-// Función para extraer y parsear JSON
-bool Server::extractJsonParam(const std::string& body, json& j) {
-    std::regex pat("<param><value><string>([^<]*)</string></value></param>");
-    std::sregex_iterator it(body.begin(), body.end(), pat), end;
-    
-    if (it != end) {
-        try {
-            std::string jsonStr = (*it)[1];
-            std::cout << "📋 JSON recibido: " << jsonStr << std::endl;
-            j = json::parse(jsonStr);
-            return true;
-        } catch (const std::exception& e) {
-            std::cerr << "❌ Error parseando JSON: " << e.what() << std::endl;
-            std::cerr << "📋 JSON problemático: " << (*it)[1] << std::endl;
-        }
+    if (t == "off" || t == "apagar" || t == "disable" || t == "desactivar") {
+        value = false;
+        return true;
     }
     return false;
 }
-std::string Server::readFile(const std::string& filepath) {
-    std::ifstream file(filepath, std::ios::binary);
-    if (!file) return "";
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    return ss.str();
+
+bool snapshotsEqual(const EstadoRobot::Snapshot& a, const EstadoRobot::Snapshot& b) {
+    auto approx = [](float lhs, float rhs) {
+        return std::fabs(lhs - rhs) < 1e-3f;
+    };
+    return approx(a.x, b.x) && approx(a.y, b.y) && approx(a.z, b.z)
+        && a.motores == b.motores && a.garra == b.garra
+        && a.modoAbs == b.modoAbs && a.emergencia == b.emergencia;
 }
 
-std::string Server::getMimeType(const std::string& path) {
-    if (endsWith(path, ".html")) return "text/html";
-    if (endsWith(path, ".css")) return "text/css";
-    if (endsWith(path, ".js")) return "application/javascript";
-    if (endsWith(path, ".png")) return "image/png";
-    if (endsWith(path, ".jpg") || endsWith(path, ".jpeg")) return "image/jpeg";
-    if (endsWith(path, ".gif")) return "image/gif";
-    if (endsWith(path, ".ico")) return "image/x-icon";
-    if (endsWith(path, ".mp3")) return "audio/mpeg";
-    return "text/plain";
-}
-
-std::string Server::serveStaticFile(const std::string& requestPath) {
-    std::cout << "📁 SOLICITUD DE ARCHIVO: " << requestPath << std::endl;
-
-    // Buscamos primero en la carpeta del cliente (relativa a Code/build): ../HTML
-    std::string clientBase = "HTML";
-    std::string serverBase = "."; // carpeta actual del servidor (Code/build)
-
-    std::string relpath;
-    if (requestPath == "/" || requestPath == "/index.html") relpath = "/signin.html";
-    else relpath = requestPath;
-
-    fs::path clientPath = fs::path(clientBase) / relpath.substr(1);
-    fs::path serverPath = fs::path(serverBase) / relpath.substr(1);
-
-    std::string filepath;
-    std::string servedFrom;
-
-    if (!relpath.empty() && relpath[0] == '/') {
-        // try client dir first
-        if (fs::exists(clientPath) && fs::is_regular_file(clientPath)) {
-            filepath = clientPath.string();
-            servedFrom = clientBase;
-        } else if (fs::exists(serverPath) && fs::is_regular_file(serverPath)) {
-            filepath = serverPath.string();
-            servedFrom = serverBase;
-        }
+std::string runRpc(CommandContext& ctx, const std::string& method, const json& payload = json::object()) {
+    if (!ctx.login || !ctx.robot || !ctx.estado || !ctx.aprendizaje || !ctx.admin) {
+        return "RPC no disponible en este contexto";
     }
-
-    if (filepath.empty()) {
-        return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\n\r\n404 Not Found";
-    }
-
-    std::cout << "📁 Sirviendo archivo: " << filepath << " (desde: " << servedFrom << ")" << std::endl;
-
-    std::string content = readFile(filepath);
-    std::string mimeType = getMimeType(filepath);
-
-    std::ostringstream response;
-    response << "HTTP/1.1 200 OK\r\n"
-             << "Content-Type: " << mimeType << "\r\n"
-             << "Content-Length: " << content.size() << "\r\n"
-             << "Access-Control-Allow-Origin: *\r\n"
-             << "\r\n"
-             << content;
-
-    return response.str();
-}
-
-bool Server::extractParams(const std::string& body,std::string& u,std::string& p){
-    std::regex pat("<param><value><string>([^<]*)</string></value></param>");
-    std::sregex_iterator it(body.begin(),body.end(),pat),end;
-    int i=0;
-    for(;it!=end && i<2;++it,++i){ if(i==0)u=(*it)[1]; else p=(*it)[1]; }
-    return i==2;
-}
-
-std::vector<std::string> Server::extractMultipleParams(const std::string& body, int count) {
-    std::vector<std::string> params;
-    std::regex pat("<param><value><string>([^<]*)</string></value></param>");
-    std::sregex_iterator it(body.begin(), body.end(), pat), end;
-    for(int i = 0; it != end && i < count; ++it, ++i) {
-        params.push_back((*it)[1]);
-    }
-    return params;
-}
-
-std::string Server::procesarRPC(const std::string& body, Login& login, RobotControllerSimple& robot,
-                        EstadoRobot& estado, Aprendizaje& aprendizaje, AdministradorSistema& admin,
-                        bool quiet) {
-    size_t s = body.find("<methodName>"), e = body.find("</methodName>");
-    std::string metodo = (s != std::string::npos && e != std::string::npos) ? 
-                         body.substr(s + 12, e - (s + 12)) : "desconocido";
     std::ostringstream xml;
+    xml << "<?xml version=\"1.0\"?><methodCall><methodName>" << method << "</methodName><params>"
+        << "<param><value><string>" << payload.dump() << "</string></value></param>"
+        << "</params></methodCall>";
+    return ctx.server.procesarRPC(xml.str(), *ctx.login, *ctx.robot, *ctx.estado, *ctx.aprendizaje, *ctx.admin);
+}
 
-    if (!quiet) {
-        std::cout << "=== INICIO PROCESAR RPC ===" << std::endl;
-        std::cout << "🔍 MÉTODO: " << metodo << std::endl;
-        std::cout << "📋 BODY: " << body << std::endl;
-    }
+std::unordered_map<std::string, CommandFn> buildCommandTable() {
+    std::unordered_map<std::string, CommandFn> cmds;
 
-    if(metodo == "login"){ 
-        std::string u, p;
-        if(extractParams(body, u, p)) {
-            auto res = login.authenticate(u, p);
-            xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                << "<member><name>status</name><value><string>" << (res.success?"success":"fail") << "</string></value></member>"
-                << "<member><name>privilege</name><value><string>" << res.privilege << "</string></value></member>"
-                << "<member><name>token</name><value><string>" << res.token << "</string></value></member>"
-                << "<member><name>message</name><value><string>" << res.message << "</string></value></member>"
-                << "</struct></value></param></params></methodResponse>";
+    cmds["ping"] = [](const std::string&, CommandContext& ctx) {
+        return ctx.server.ping();
+    };
+
+    cmds["start"] = [](const std::string&, CommandContext& ctx) {
+        return "Server state: " + toString(ctx.server.getState());
+    };
+
+    cmds["busy"] = [](const std::string&, CommandContext& ctx) {
+        return ctx.server.setBusy();
+    };
+
+    cmds["stable"] = [](const std::string&, CommandContext& ctx) {
+        return ctx.server.setStable();
+    };
+
+    cmds["fail"] = [](const std::string&, CommandContext& ctx) {
+        return ctx.server.fail();
+    };
+
+    cmds["status"] = [](const std::string&, CommandContext& ctx) {
+        return "Server state: " + toString(ctx.server.getState());
+    };
+
+    cmds["rpc"] = [](const std::string& args, CommandContext& ctx) {
+        if (!ctx.login || !ctx.robot || !ctx.estado || !ctx.aprendizaje || !ctx.admin) {
+            return std::string("RPC not available in current context");
         }
-    }
-    else if(metodo == "gripper") {
-        json j;
-        if(extractJsonParam(body, j)) {
-            bool activar = j.value("on", false);
-            std::cout << "🦾 GARRA parseado - activar: " << activar << std::endl;
-            robot.setGarra(activar);
-            xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                << "<member><name>status</name><value><string>success</string></value></member>"
-                << "<member><name>message</name><value><string>Garra " << (activar?"activada":"desactivada") << "</string></value></member>"
-                << "</struct></value></param></params></methodResponse>";
+        std::istringstream iss(args);
+        std::string method;
+        iss >> method;
+        if (method.empty()) {
+            return std::string("Usage: rpc <method> [jsonPayload]");
         }
-    }
-    else if(metodo == "motors") {
-        json j;
-        if(extractJsonParam(body, j)) {
-            bool activar = j.value("on", false);
-            std::cout << "⚙️ MOTORES parseado - activar: " << activar << std::endl;
-            robot.setMotores(activar);
-            xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                << "<member><name>status</name><value><string>success</string></value></member>"
-                << "<member><name>message</name><value><string>Motores " << (activar?"encendidos":"apagados") << "</string></value></member>"
-                << "</struct></value></param></params></methodResponse>";
-        }
-    }
-    else if(metodo == "move") {
-        json j;
-        if(extractJsonParam(body, j)) {
-            try {
-                float x = j.value("x", 0.0f);
-                float y = j.value("y", 0.0f);
-                float z = j.value("z", 0.0f);
-                float f = j.value("f", 1200.0f);
-                
-                std::cout << "🎯 MOVER parseado - X:" << x << " Y:" << y << " Z:" << z << " F:" << f << std::endl;
-                
-                auto estadoActual = estado.leer();
-                robot.mover(x, y, z, f, estadoActual.modoAbs);
-                
-                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                    << "<member><name>status</name><value><string>success</string></value></member>"
-                    << "<member><name>message</name><value><string>Movimiento enviado: X=" << x << " Y=" << y << " Z=" << z << " F=" << f << "</string></value></member>"
-                    << "</struct></value></param></params></methodResponse>";
-            } catch (const std::exception& e) {
-                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                    << "<member><name>status</name><value><string>error</string></value></member>"
-                    << "<member><name>message</name><value><string>Error en parámetros: " << e.what() << "</string></value></member>"
-                    << "</struct></value></param></params></methodResponse>";
-            }
+        std::string rest;
+        std::getline(iss, rest);
+        rest = trimCopy(rest);
+        std::ostringstream xml;
+        xml << "<?xml version=\"1.0\"?><methodCall><methodName>" << method << "</methodName><params>";
+        if (!rest.empty()) {
+            xml << "<param><value><string>" << rest << "</string></value></param>";
         } else {
-            xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                << "<member><name>status</name><value><string>error</string></value></member>"
-                << "<member><name>message</name><value><string>No se pudo parsear JSON</string></value></member>"
-                << "</struct></value></param></params></methodResponse>";
+            xml << "<param><value><string>{}</string></value></param>";
         }
+        xml << "</params></methodCall>";
+        return ctx.server.procesarRPC(xml.str(), *ctx.login, *ctx.robot, *ctx.estado, *ctx.aprendizaje, *ctx.admin);
+    };
+    
+    cmds["pkill"] = cmds["exit"] = [](const std::string&, CommandContext& ctx) {
+        ctx.running = false;
+        ctx.closing = true;
+        if (ctx.closingServed) {
+            ctx.closingServed->store(false);
+        }
+        auto listenPtr = ctx.listenFd;
+        auto servedPtr = ctx.closingServed;
+        std::thread([listenPtr, servedPtr]{
+            const auto maxWait = std::chrono::seconds(45);
+            auto start = std::chrono::steady_clock::now();
+            bool served = false;
+            while (std::chrono::steady_clock::now() - start < maxWait) {
+                if (servedPtr && servedPtr->load()) {
+                    served = true;
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (served) {
+                std::this_thread::sleep_for(kClosingGrace);
+            }
+            if (listenPtr && *listenPtr >= 0) {
+                shutdown(*listenPtr, SHUT_RDWR);
+            }
+        }).detach();
+        return "Shutting down server...";
+    };
+
+    
+
+    cmds["help"] = cmds["--help"] = cmds["--h"] = [](const std::string&, CommandContext&) {
+        std::ostringstream out;
+        out << "Comandos disponibles:\n"
+            << "  ping | busy | stable | fail | status\n"
+            << "  motors on|off        -> Enciende o apaga motores (método 'motors')\n"
+            << "  gripper on|off       -> Activa o desactiva la garra (método 'gripper')\n"
+            << "  setAbs | setRel      -> Cambia modo absoluto/relativo\n"
+            << "  emergencyStop        -> Parada de emergencia inmediata\n"
+            << "  resetEmergency       -> Limpia la emergencia\n"
+            << "  enableRemote | disableRemote -> Control remoto ON/OFF\n"
+            << "  exportLog [dir]      -> Copia HTML/static_server.log a un archivo con timestamp\n"
+            << "  rpc <metodo> [json]  -> Envía una llamada RPC manual\n"
+            << "  pkill / exit         -> Cierra el servidor mostrando server_terminated.html\n";
+        return out.str();
+    };
+
+    cmds["motors"] = [](const std::string& args, CommandContext& ctx) {
+        std::istringstream iss(args);
+        std::string tok; iss >> tok;
+        if (tok.empty()) return std::string("Uso: motors on|off");
+        bool on;
+        if (!parseOnOffToken(tok, on)) return std::string("Uso: motors on|off");
+        json payload; payload["on"] = on;
+        return runRpc(ctx, "motors", payload);
+    };
+
+    cmds["gripper"] = cmds["grip"] = [](const std::string& args, CommandContext& ctx) {
+        std::istringstream iss(args);
+        std::string tok; iss >> tok;
+        if (tok.empty()) return std::string("Uso: gripper on|off");
+        bool on;
+        if (!parseOnOffToken(tok, on)) return std::string("Uso: gripper on|off");
+        json payload; payload["on"] = on;
+        return runRpc(ctx, "gripper", payload);
+    };
+
+    cmds["setAbs"] = cmds["setabs"] = [](const std::string&, CommandContext& ctx) {
+        return runRpc(ctx, "setAbs");
+    };
+
+    cmds["setRel"] = cmds["setrel"] = [](const std::string&, CommandContext& ctx) {
+        return runRpc(ctx, "setRel");
+    };
+
+    cmds["emergencyStop"] = cmds["estop"] = [](const std::string&, CommandContext& ctx) {
+        json payload;
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        std::ostringstream ts;
+        ts << std::put_time(std::localtime(&t), "%FT%T");
+        payload["timestamp"] = ts.str();
+        payload["source"] = "cli";
+        return runRpc(ctx, "emergencyStop", payload);
+    };
+
+    cmds["resetEmergency"] = cmds["resetestop"] = [](const std::string&, CommandContext& ctx) {
+        return runRpc(ctx, "resetEmergency");
+    };
+
+    cmds["enableRemote"] = [](const std::string&, CommandContext& ctx) {
+        return runRpc(ctx, "enableRemote");
+    };
+
+    cmds["disableRemote"] = [](const std::string&, CommandContext& ctx) {
+        return runRpc(ctx, "disableRemote");
+    };
+
+    cmds["exportLog"] = cmds["exportlog"] = [](const std::string& args, CommandContext&) {
+        namespace fs = std::filesystem;
+        fs::path source = fs::path("HTML") / "static_server.log";
+        if (!fs::exists(source)) {
+            return std::string("No existe el archivo de log en ") + source.string();
+        }
+        fs::path targetDir = trimCopy(args);
+        if (targetDir.empty()) targetDir = "exported_logs";
+        std::error_code ec;
+        fs::create_directories(targetDir, ec);
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        std::ostringstream filename;
+        filename << "log_" << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S") << ".log";
+        fs::path dest = fs::path(targetDir) / filename.str();
+        fs::copy_file(source, dest, fs::copy_options::overwrite_existing, ec);
+        if (ec) {
+            return std::string("No se pudo exportar log: ") + ec.message();
+        }
+        return std::string("Log exportado en ") + dest.string();
+    };
+
+
+
+    return cmds;
+}
+
+std::string dispatchCommand(const std::string& line,
+                            CommandContext& ctx,
+                            const std::unordered_map<std::string, CommandFn>& commands) {
+    std::istringstream iss(line);
+    std::string cmd;
+    iss >> cmd;
+    std::string args;
+    std::getline(iss, args);
+    auto pos = args.find_first_not_of(" \t");
+    if (pos == std::string::npos) args.clear();
+    else args.erase(0, pos);
+
+    if (cmd.empty()) return "";
+    auto it = commands.find(cmd);
+    if (it == commands.end()) {
+        return "Unknown command: " + cmd;
     }
-    else if (metodo == "runFile") {
-        json j;
-        if (extractJsonParam(body, j)) {
-            std::string path = j.value("path", "");
-            // Sanear path: no permitir traversal
-            if (path.find("..") != std::string::npos) {
-                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                    << "<member><name>status</name><value><string>error</string></value></member>"
-                    << "<member><name>message</name><value><string>Ruta no permitida</string></value></member>"
-                    << "</struct></value></param></params></methodResponse>";
-            } else {
-                if (!fs::exists(path)) {
-                    xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                        << "<member><name>status</name><value><string>error</string></value></member>"
-                        << "<member><name>message</name><value><string>Archivo no encontrado</string></value></member>"
-                        << "</struct></value></param></params></methodResponse>";
-                } else {
-                    robot.ejecutarArchivo(path);
-                    xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                        << "<member><name>status</name><value><string>success</string></value></member>"
-                        << "<member><name>message</name><value><string>Ejecución iniciada: " << path << "</string></value></member>"
-                        << "</struct></value></param></params></methodResponse>";
+    return it->second(args, ctx);
+}
+
+
+
+int main(int argc, char* argv[]) {
+    Server ServerB;
+    bool running = true;
+    bool closing = false;
+    int listenFdStorage = -1;
+    std::atomic<bool> closingServed{false};
+    bool cleanTerminal = ServerB.parseCleanFlag(argc, argv);
+    CommandContext ctx{ServerB, running, closing, &listenFdStorage, &closingServed,
+                       nullptr, nullptr, nullptr, nullptr, nullptr};
+    auto commands = buildCommandTable();
+    std::thread replThread([&]{
+        bool firstCommandOutput = true;
+        std::string line;
+        while (running && std::getline(std::cin, line)) {
+                if (line.empty()) continue;
+                try {
+                    if (cleanTerminal && !firstCommandOutput) {
+                        std::system("clear");
+                    }
+                    firstCommandOutput = false;
+                    auto resp = dispatchCommand(line, ctx, commands);
+                    if (!resp.empty()) {
+                        std::cout << resp << std::endl;
+                    }
+                    if (!running) break; // por si cmd cambia running
+                } catch (const std::exception& e) {
+                    std::cerr << "REPL error: " << e.what() << std::endl;
                 }
             }
-        }
-    }
-    else if (metodo == "sendGcode") {
-        json j;
-        if (extractJsonParam(body, j)) {
-            std::string line = j.value("line", "");
-            if (!line.empty()) {
-                std::cout << "➡️ EJECUTANDO LÍNEA GCODE: " << line << std::endl;
-                robot.ejecutarComando(line);
-                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                    << "<member><name>status</name><value><string>success</string></value></member>"
-                    << "<member><name>message</name><value><string>Comando enviado: " << line << "</string></value></member>"
-                    << "</struct></value></param></params></methodResponse>";
-            } else {
-                xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                    << "<member><name>status</name><value><string>error</string></value></member>"
-                    << "<member><name>message</name><value><string>Línea vacía</string></value></member>"
-                    << "</struct></value></param></params></methodResponse>";
-            }
-        }
-    }
-    else if(metodo == "emergencyStop") {
-        robot.emergencia();
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Emergencia activada</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if(metodo == "resetEmergency") {
-        robot.resetEmergencia();
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Emergencia reseteada</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if(metodo == "setAbs") {
-        robot.setAbs(true);
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Modo cambiado a absoluto</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if(metodo == "setRel") {
-        robot.setAbs(false);
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Modo cambiado a relativo</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if(metodo == "getEstado") {
-        auto s = estado.leer();
-        bool remoto = admin.getRemoto();
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>x</name><value><double>" << s.x << "</double></value></member>"
-            << "<member><name>y</name><value><double>" << s.y << "</double></value></member>"
-            << "<member><name>z</name><value><double>" << s.z << "</double></value></member>"
-            << "<member><name>modo</name><value><string>" << (s.modoAbs?"ABS":"REL") << "</string></value></member>"
-            << "<member><name>motores</name><value><string>" << (s.motores?"ON":"OFF") << "</string></value></member>"
-            << "<member><name>garra</name><value><string>" << (s.garra?"ON":"OFF") << "</string></value></member>"
-            << "<member><name>emergencia</name><value><string>" << (s.emergencia?"SI":"NO") << "</string></value></member>"
-            << "<member><name>remoto</name><value><string>" << (remoto?"ON":"OFF") << "</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if(metodo == "home") {
-    // Comando de home típico en G-code
-    robot.ejecutarComando("G28");
-    xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-        << "<member><name>status</name><value><string>success</string></value></member>"
-        << "<member><name>message</name><value><string>Home ejecutado</string></value></member>"
-        << "</struct></value></param></params></methodResponse>";
-}
-    else if (metodo == "startLearning") {
-        // Iniciar modo aprendizaje: abrir archivo para registrar comandos
-        aprendizaje.iniciar();
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Aprendizaje iniciado</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if (metodo == "stopLearning") {
-        // Detener modo aprendizaje: cerrar archivo y generar CSV
-        aprendizaje.detener();
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Aprendizaje detenido y guardado</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if (metodo == "enableRemote") {
-        admin.setRemoto(true);
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Control remoto habilitado</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else if (metodo == "disableRemote") {
-        admin.setRemoto(false);
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>success</string></value></member>"
-            << "<member><name>message</name><value><string>Control remoto deshabilitado</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
-    else {
-        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-            << "<member><name>status</name><value><string>error</string></value></member>"
-            << "<member><name>message</name><value><string>Método desconocido</string></value></member>"
-            << "</struct></value></param></params></methodResponse>";
-    }
+        });
 
-    std::string respuesta = xml.str();
-    if (!quiet) {
-        std::cout << "📤 RESPUESTA XML: " << respuesta << std::endl;
-        std::cout << "=== FIN PROCESAR RPC ===" << std::endl;
-    }
-    
-    return respuesta;
-}
-
-void Server::parseHttpRequest(const std::string& request, std::string& method, std::string& path) {
-    std::istringstream iss(request);
-    iss >> method >> path;
-}
-
-int main() {
     std::cout << "🤖 INICIANDO SERVIDOR ROBOT RRR (DEBUG)" << std::endl;
 
     Login login;
@@ -415,7 +338,14 @@ int main() {
     RobotControllerSimple robot(comm, estado);
     robot.setAprendizaje(&aprendizaje);
 
+    ctx.login = &login;
+    ctx.robot = &robot;
+    ctx.estado = &estado;
+    ctx.aprendizaje = &aprendizaje;
+    ctx.admin = &admin;
+
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    listenFdStorage = server_fd;
     sockaddr_in address{}; 
     address.sin_family = AF_INET; 
     address.sin_addr.s_addr = INADDR_ANY; 
@@ -427,33 +357,116 @@ int main() {
     
     if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
         std::cerr << "❌ ERROR bind: " << strerror(errno) << std::endl;
+        ServerB.pause_sec(5);
         return 1;
     }
     
     listen(server_fd, 5);
     std::cout << "🚀 Servidor escuchando en puerto 8080" << std::endl;
+    std::cout << "🔗 Mandar [start] para empezar el servidor." << std::endl;
+    ServerB.press_enter(cleanTerminal);
 
-    while(true) {
+    bool firstFeedback = true;
+    struct RequestCache {
+        std::string signature;
+        std::string response;
+        EstadoRobot::Snapshot estado{};
+        std::chrono::steady_clock::time_point timestamp{};
+    };
+    RequestCache lastRequestCache{};
+    bool hasCachedRequest = false;
+
+    while(ctx.running || closing) {
         int client_fd = accept(server_fd, nullptr, nullptr);
+        if (client_fd < 0) {
+            if (closing) break;
+            else continue;
+        }
         char buffer[8192] = {0};
         ssize_t n = read(client_fd, buffer, sizeof(buffer) - 1);
+        bool suppressLogging = false;
+        bool duplicateRequest = false;
+        bool snapshotCaptured = false;
+        std::string requestSignature;
+        std::chrono::steady_clock::time_point requestTimestamp;
+        EstadoRobot::Snapshot snapshotBefore{};
+        std::string respuestaHttp;
         
         if(n > 0) {
-            std::string req(buffer);
+            std::string req(buffer, n);
             std::string method, path;
-            parseHttpRequest(req, method, path);
-            
-            std::cout << "🌐 SOLICITUD: " << method << " " << path << std::endl;
-
-            std::string respuestaHttp;
-            
-            if (method == "GET") {
-                respuestaHttp = serveStaticFile(path);
-            } 
-            else if (method == "OPTIONS") {
-                respuestaHttp = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: 0\r\n\r\n";
+            ServerB.parseHttpRequest(req, method, path);
+            requestTimestamp = std::chrono::steady_clock::now();
+            snapshotBefore = estado.leer();
+            snapshotCaptured = true;
+            std::size_t bodyHash = std::hash<std::string>{}(req);
+            requestSignature = method + "|" + path + "|" + std::to_string(bodyHash);
+            bool isHealthCheck = (path.rfind("/health.txt", 0) == 0);
+            bool isStatusPoll = false;
+            if (!isHealthCheck && method == "POST") {
+                if (req.find("<methodName>getEstado</methodName>") != std::string::npos) {
+                    isStatusPoll = true;
+                }
             }
-            else if (method == "POST") {
+            suppressLogging = isHealthCheck || isStatusPoll;
+            if (hasCachedRequest) {
+                const bool withinWindow = (requestTimestamp - lastRequestCache.timestamp) <= kRequestDedupWindow;
+                if (withinWindow &&
+                    requestSignature == lastRequestCache.signature &&
+                    snapshotsEqual(snapshotBefore, lastRequestCache.estado)) {
+                    duplicateRequest = true;
+                    suppressLogging = true;
+                    respuestaHttp = lastRequestCache.response;
+                }
+            }
+            if (!suppressLogging) {
+                if (cleanTerminal && !firstFeedback) {
+                    std::system("clear");
+                }
+                firstFeedback = false;
+                std::cout << "🌐 SOLICITUD: " << method << " " << path << std::endl;
+            }
+            
+            if (!duplicateRequest) {
+                if (closing) {
+                    std::string closingHtml = ServerB.readFile("HTML/server_terminated.html");
+                    if (closingHtml.empty()) {
+                        closingHtml =
+                            "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Server Closed</title>"
+                            "<style>body{font-family:system-ui;background:#0f172a;color:#e2e8f0;display:flex;"
+                            "align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
+                            "</style></head><body><div><h1>[SERVER TERMINATED]</h1>"
+                            "<p>El servicio se cerró manualmente.</p></div></body></html>";
+                    }
+                    std::ostringstream out;
+                    out << "HTTP/1.1 503 Service Unavailable\r\n"
+                        << "Content-Type: text/html; charset=utf-8\r\n"
+                        << "Content-Length: " << closingHtml.size() << "\r\n"
+                        << "Connection: close\r\n"
+                        << "Cache-Control: no-store\r\n"
+                        << "Access-Control-Allow-Origin: *\r\n"
+                        << "X-Server-Closing: yes\r\n\r\n"
+                        << closingHtml;
+                    respuestaHttp = out.str();
+                } else if (method == "GET") {
+                    if (isHealthCheck) {
+                    const std::string body = "ok";
+                    std::ostringstream out;
+                    out << "HTTP/1.1 200 OK\r\n"
+                        << "Content-Type: text/plain; charset=utf-8\r\n"
+                        << "Cache-Control: no-store\r\n"
+                        << "Content-Length: " << body.size() << "\r\n"
+                        << "Access-Control-Allow-Origin: *\r\n\r\n"
+                        << body;
+                    respuestaHttp = out.str();
+                    } else {
+                        respuestaHttp = ServerB.serveStaticFile(path);
+                    }
+                } 
+                else if (method == "OPTIONS") {
+                    respuestaHttp = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: 0\r\n\r\n";
+                }
+                else if (method == "POST") {
                         size_t body_pos = req.find("\r\n\r\n");
                         if (body_pos != std::string::npos) {
                             std::string body = req.substr(body_pos + 4);
@@ -542,13 +555,16 @@ int main() {
                                         std::ostringstream out; out << "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: " << err.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << err;
                                         respuestaHttp = out.str();
                                     }
-                                } catch (const std::exception& e) {
+                                }                                 
+                                catch (const std::exception& e) {
                                     std::string err = std::string("Exception: ") + e.what();
                                     std::ostringstream out; out << "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: " << err.size() << "\r\nAccess-Control-Allow-Origin: *\r\n\r\n" << err;
                                     respuestaHttp = out.str();
+                                    ServerB.press_enter(cleanTerminal);
                                 }
                             } else {
-                                std::string resp = procesarRPC(body, login, robot, estado, aprendizaje, admin);
+                                const bool quietRpc = isStatusPoll;
+                                std::string resp = ServerB.procesarRPC(body, login, robot, estado, aprendizaje, admin, quietRpc);
                         
                                 std::ostringstream out;
                                 out << "HTTP/1.1 200 OK\r\n"
@@ -562,19 +578,43 @@ int main() {
                                 respuestaHttp = out.str();
                             }
                         }
+                }
             }
             
+            const bool wasClosingResponse = closing;
             if (!respuestaHttp.empty()) {
                 write(client_fd, respuestaHttp.c_str(), respuestaHttp.size());
-                std::cout << "✅ RESPUESTA ENVIADA (" << respuestaHttp.size() << " bytes)" << std::endl;
+                if (wasClosingResponse) {
+                    closingServed.store(true);
+                }
+                if (!suppressLogging) {
+                    std::cout << "✅ RESPUESTA ENVIADA (" << respuestaHttp.size() << " bytes)" << std::endl;
+                }
+                if (snapshotCaptured) {
+                    lastRequestCache.signature = requestSignature;
+                    lastRequestCache.response = respuestaHttp;
+                    lastRequestCache.estado = snapshotBefore;
+                    lastRequestCache.timestamp = requestTimestamp;
+                    hasCachedRequest = true;
+                }
             } else {
                 std::string error = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\n\r\n404 Not Found";
                 write(client_fd, error.c_str(), error.size());
-                std::cout << "❌ ENVIADO 404" << std::endl;
+                if (!suppressLogging) {
+                    std::cout << "❌ ENVIADO 404" << std::endl;
+                }
             }
         }
         close(client_fd);
-        std::cout << "----------------------------------------" << std::endl;
+        if (!suppressLogging) {
+            std::cout << "----------------------------------------" << std::endl;
+        }
     }
+    close(server_fd);
+    if (replThread.joinable()) {
+        replThread.join();
+    }
+    return 0;
+
     return 0;
 }
