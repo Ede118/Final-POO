@@ -12,6 +12,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <functional>
+#include <vector>
 
 #include "login.h"
 #include "robot_controller_simple.h"

@@ -35,6 +35,8 @@ public:
     AuthResult authenticate(const std::string& username, const std::string& password);
     // Devuelve el nombre de usuario asociado a un token activo, o cadena vacía
     std::string usernameForToken(const std::string& token);
+    // Devuelve el privilegio asociado a un token activo, o cadena vacía
+    std::string privilegeForToken(const std::string& token);
 };
 
 #endif

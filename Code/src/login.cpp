@@ -4,7 +4,11 @@
 #include <iostream>
 #include <string>
 // storage for tokens
-static std::unordered_map<std::string, std::string> tokens;
+struct TokenInfo {
+    std::string username;
+    std::string privilege;
+};
+static std::unordered_map<std::string, TokenInfo> tokens;
 static std::mutex token_mtx;
 
 Login::Login() {
@@ -113,7 +117,7 @@ Login::AuthResult Login::authenticate(const std::string& username, const std::st
         // Guardar token activo -> usuario
         {
             std::lock_guard<std::mutex> l(token_mtx);
-            tokens[result.token] = username;
+            tokens[result.token] = TokenInfo{username, result.privilege};
         }
         result.message = "Login exitoso";
         std::cout << "✅ Login exitoso - Usuario: " << username << ", Privilegio: " << result.privilege << std::endl;
@@ -133,6 +137,13 @@ Login::AuthResult Login::authenticate(const std::string& username, const std::st
 std::string Login::usernameForToken(const std::string& token) {
     std::lock_guard<std::mutex> l(token_mtx);
     auto it = tokens.find(token);
-    if (it != tokens.end()) return it->second;
+    if (it != tokens.end()) return it->second.username;
+    return std::string();
+}
+
+std::string Login::privilegeForToken(const std::string& token) {
+    std::lock_guard<std::mutex> l(token_mtx);
+    auto it = tokens.find(token);
+    if (it != tokens.end()) return it->second.privilege;
     return std::string();
 }

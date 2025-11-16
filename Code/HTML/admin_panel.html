@@ -223,10 +223,10 @@
   <script>
     // Preload UI sounds
     const sounds = {
-      emergency: new Audio('/audios/parada_emergencia.mp3'),
-      motorStart: new Audio('/audios/arrancar_motor.mp3'),
-      motorStop: new Audio('/audios/detener_motor.mp3'),
-      fueraRango: new Audio('/audios/fuera_rango.mp3')
+      emergency: new Audio('./audios/parada_emergencia.mp3'),
+      motorStart: new Audio('./audios/arrancar_motor.mp3'),
+      motorStop: new Audio('./audios/detener_motor.mp3'),
+      fueraRango: new Audio('./audios/fuera_rango.mp3')
     };
     Object.values(sounds).forEach(a => { a.preload = 'auto'; a.volume = 0.9; });
 

@@ -53,3 +53,20 @@ timestamp,category,detail,user,node,response_code,module,message
 "2025-11-16T03:01:45","request","POST / motors","ADMIN","127.0.0.1",200,,,
 "2025-11-16T03:01:46","request","POST / gripper","ADMIN","127.0.0.1",200,,,
 "2025-11-16T03:01:47","request","POST / home","ADMIN","127.0.0.1",200,,,
+"2025-11-16T12:02:05","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T12:02:05","event",,,,,"auth","Login de ADMIN como admin"
+"2025-11-16T12:03:10","event",,,,,"rpc","ADMIN move x:200.000000 y:200.000000"
+"2025-11-16T12:03:21","event",,,,,"rpc","ADMIN move x:0.000000 y:0.000000"
+"2025-11-16T12:03:45","event",,,,,"rpc","ADMIN move x:200.000000 y:200.000000"
+"2025-11-16T12:03:55","event",,,,,"rpc","ADMIN move x:100.000000 y:100.000000"
+"2025-11-16T12:04:08","event",,,,,"rpc","ADMIN move x:250.000000 y:250.000000"
+"2025-11-16T12:07:30","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T12:07:30","event",,,,,"auth","Login de ADMIN como admin"
+"2025-11-16T12:08:06","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T12:08:06","event",,,,,"auth","Login de ADMIN como admin"
+"2025-11-16T12:09:33","event",,,,,"auth","Login exitoso usuario:USER privilegio:user"
+"2025-11-16T12:09:33","event",,,,,"auth","Login de USER como user"
+"2025-11-16T12:19:27","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T12:19:27","event",,,,,"auth","Login de ADMIN como admin"
+"2025-11-16T12:21:42","event",,,,,"auth","Login exitoso usuario:ADMIN privilegio:admin"
+"2025-11-16T12:21:42","event",,,,,"auth","Login de ADMIN como admin"
