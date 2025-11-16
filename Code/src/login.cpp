@@ -71,7 +71,6 @@ Login::Login() {
 
 Login::~Login() {
     if (db) {
-        std::cout << "🔌 Cerrando conexión a BD..." << std::endl;
         sqlite3_close(db);
     }
 }

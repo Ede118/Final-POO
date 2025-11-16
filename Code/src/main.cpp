@@ -97,6 +97,69 @@ std::string runRpc(CommandContext& ctx, const std::string& method, const json& p
     return ctx.server.procesarRPC(xml.str(), *ctx.login, *ctx.robot, *ctx.estado, *ctx.aprendizaje, *ctx.admin);
 }
 
+#include <iostream>
+
+std::ostringstream print_help(){
+    std::ostringstream out;
+    std::cout <<
+"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🛈 AYUDA / COMANDOS ━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"
+"┃                                                                          ┃\n"
+"┃ 🔍 ping | busy | stable | fail | status                                  ┃\n"
+"┃    Estado actual del servidor / simulación                               ┃\n"
+"┃                                                                          ┃\n"
+"┃ ⚙  motors on|off                                                         ┃\n"
+"┃    Enciende o apaga los motores (método 'motors')                        ┃\n"
+"┃                                                                          ┃\n"
+"┃ 🤖 gripper on|off                                                        ┃\n"
+"┃    Activa o desactiva la garra (método 'gripper')                        ┃\n"
+"┃                                                                          ┃\n"
+"┃ 📏 setAbs | setRel                                                       ┃\n"
+"┃    Cambia entre modo absoluto / relativo                                 ┃\n"
+"┃                                                                          ┃\n"
+"┃ 🆘 emergencyStop                                                         ┃\n"
+"┃    Parada de emergencia inmediata                                        ┃\n"
+"┃                                                                          ┃\n"
+"┃ ♻  resetEmergency                                                        ┃\n"
+"┃    Limpia el estado de emergencia                                        ┃\n"
+"┃                                                                          ┃\n"
+"┃ 🌐 enableRemote | disableRemote                                          ┃\n"
+"┃    Habilita / deshabilita el control remoto                              ┃\n"
+"┃                                                                          ┃\n"
+"┃ 📤 exportLog [dir]                                                       ┃\n"
+"┃    Copia HTML/static_server.log a un archivo timestamped                 ┃\n"
+"┃                                                                          ┃\n"
+"┃ 💬 rpc <metodo> [json]                                                   ┃\n"
+"┃    Envía una llamada RPC manual                                          ┃\n"
+"┃                                                                          ┃\n"
+"┃ ⏹ pkill | exit                                                           ┃\n"
+"┃    Cierra el servidor mostrando server_terminated.html                   ┃\n"
+"┃                                                                          ┃\n"
+"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n" << std::endl;
+    return out;
+}
+
+std::ostringstream print_shutdown_banner() {
+    std::ostringstream out;
+    out <<
+"┏━━━━━━━━━━━━━━━━━━━━━━ ⏹ APAGANDO SERVIDOR ━━━━━━━━━━━━━━━━━━━━━━━┓\n"
+"┃                                                                   ┃\n"
+"┃  Se recibió el comando 'pkill/exit'.                              ┃\n"
+"┃                                                                   ┃\n"
+"┃  🔌 Cerrando conexiones activas...                                ┃\n"
+"┃  🧾 Volcando / guardando logs pendientes...                       ┃\n"
+"┃  🛑 Deteniendo motores / simulación...                            ┃\n"
+"┃                                                                   ┃\n"
+"┃  ✅ Servidor detenido de forma segura.                            ┃\n"
+"┃     Ahora podés cerrar esta ventana.                              ┃\n"
+"┃                                                                   ┃\n"
+"┃                                                                   ┃\n"
+"┃            Este proceso podría tardar unos segundos               ┃\n"
+"┃                                                                   ┃\n"
+"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n";
+    return out;
+}
+
+
 std::unordered_map<std::string, CommandFn> buildCommandTable() {
     std::unordered_map<std::string, CommandFn> cmds;
 
@@ -149,6 +212,7 @@ std::unordered_map<std::string, CommandFn> buildCommandTable() {
     };
     
     cmds["pkill"] = cmds["exit"] = [](const std::string&, CommandContext& ctx) {
+        auto s = print_shutdown_banner().str();
         ctx.running = false;
         ctx.closing = true;
         if (ctx.closingServed) {
@@ -174,24 +238,14 @@ std::unordered_map<std::string, CommandFn> buildCommandTable() {
                 shutdown(*listenPtr, SHUT_RDWR);
             }
         }).detach();
-        return "Shutting down server...";
+        return s;
     };
 
     
 
     cmds["help"] = cmds["--help"] = cmds["--h"] = [](const std::string&, CommandContext&) {
         std::ostringstream out;
-        out << "Comandos disponibles:\n"
-            << "  ping | busy | stable | fail | status\n"
-            << "  motors on|off        -> Enciende o apaga motores (método 'motors')\n"
-            << "  gripper on|off       -> Activa o desactiva la garra (método 'gripper')\n"
-            << "  setAbs | setRel      -> Cambia modo absoluto/relativo\n"
-            << "  emergencyStop        -> Parada de emergencia inmediata\n"
-            << "  resetEmergency       -> Limpia la emergencia\n"
-            << "  enableRemote | disableRemote -> Control remoto ON/OFF\n"
-            << "  exportLog [dir]      -> Copia HTML/static_server.log a un archivo con timestamp\n"
-            << "  rpc <metodo> [json]  -> Envía una llamada RPC manual\n"
-            << "  pkill / exit         -> Cierra el servidor mostrando server_terminated.html\n";
+        out = print_help();
         return out.str();
     };
 
