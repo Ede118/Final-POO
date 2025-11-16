@@ -68,7 +68,8 @@ public:
     std::vector<std::string> extractMultipleParams(const std::string& body, int count);
     
     std::string procesarRPC(const std::string& body, Login& login, RobotControllerSimple& robot,
-                        EstadoRobot& estado, Aprendizaje& aprendizaje, AdministradorSistema& admin);
+                        EstadoRobot& estado, Aprendizaje& aprendizaje, AdministradorSistema& admin,
+                        bool quiet = false);
     
     void press_enter(bool flag);
     void pause_sec(int s);

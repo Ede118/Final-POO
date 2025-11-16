@@ -1,7 +1,7 @@
 (function () {
   const TERMINATION_PATH = '/server_terminated.html';
   const HEALTH_ENDPOINT = '/health.txt';
-  const POLL_INTERVAL_MS = 30000;
+  const POLL_INTERVAL_MS = 45000;
   if (window.location.pathname.endsWith('server_terminated.html')) {
     return;
   }

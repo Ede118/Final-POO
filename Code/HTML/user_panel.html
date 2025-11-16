@@ -104,6 +104,7 @@
         <div class="section-title">Estado del Sistema</div>
         <div class="status-grid">
           <div class="badge" id="connectionBadge">🔗 Conectado: <span id="connected">No</span></div>
+          <div class="badge" id="remoteBadge">🌐 Control Remoto: ON</div>
           <div class="badge" id="modeBadge">📍 Modo: <span id="mode">ABS</span></div>
           <div class="badge" id="motorsBadge">⚙️ Motores: <span id="motors">OFF</span></div>
           <div class="badge" id="gripBadge">🦾 Garra: <span id="grip">OFF</span></div>
@@ -228,11 +229,15 @@
     };
     Object.values(sounds).forEach(a => { a.preload = 'auto'; a.volume = 0.9; });
 
+    const STATUS_POLL_MS = 9000;
+    let statusPollHandle = null;
+
     // Estado global del sistema
     let systemState = {
       emergency: false,
       motorsOn: false,
       gripperOn: false,
+      remoteEnabled: true,
       absoluteMode: true,
       position: { x: 0, y: 0, z: 0 },
       connection: false
@@ -247,6 +252,7 @@
       usernamePreview: document.getElementById('usernamePreview'),
       privilegePreview: document.getElementById('privilegePreview'),
       connected: document.getElementById('connected'),
+      remoteBadge: document.getElementById('remoteBadge'),
       mode: document.getElementById('mode'),
       motors: document.getElementById('motors'),
       grip: document.getElementById('grip'),
@@ -258,6 +264,77 @@
     };
 
     // Utilidades
+    function parseEstadoResponse(xmlText) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, "application/xml");
+        if (doc.querySelector("parsererror")) throw new Error("XML inválido");
+        const data = {};
+        doc.querySelectorAll("member").forEach(member => {
+          const name = member.querySelector("name");
+          const value = member.querySelector("value");
+          if (name && value) {
+            data[name.textContent.trim()] = value.textContent.trim();
+          }
+        });
+        return {
+          x: parseFloat(data.x ?? "0"),
+          y: parseFloat(data.y ?? "0"),
+          z: parseFloat(data.z ?? "0"),
+          modo: data.modo || "ABS",
+          motores: data.motores || "OFF",
+          garra: data.garra || "OFF",
+          emergencia: data.emergencia || "NO",
+          remoto: data.remoto === "ON"
+        };
+      } catch (err) {
+        console.error("No se pudo parsear getEstado", err);
+        return null;
+      }
+    }
+
+    function updateMotorsUIState(newState) {
+      systemState.motorsOn = newState;
+      elements.motors.textContent = newState ? 'ON' : 'OFF';
+      updateBadge(elements.motors, `Motores: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
+      document.getElementById('motorToggleBtn').textContent =
+        newState ? '⚙️ Apagar Motores' : '⚙️ Encender Motores';
+    }
+
+    function updateGripUIState(newState) {
+      systemState.gripperOn = newState;
+      elements.grip.textContent = newState ? 'ON' : 'OFF';
+      updateBadge(elements.grip, `Garra: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
+      document.getElementById('gripToggleBtn').textContent =
+        newState ? '🦾 Desactivar Garra' : '🦾 Activar Garra';
+    }
+
+    function updateEmergencyUIState(active) {
+      systemState.emergency = active;
+      document.getElementById('estopBtn').style.display = active ? 'none' : 'inline-block';
+      document.getElementById('resetBtn').style.display = active ? 'inline-block' : 'none';
+      document.getElementById('emergencyBadge').style.display = active ? 'inline-block' : 'none';
+      if (active) {
+        elements.queue.innerHTML = '<div>🛑 PARADA DE EMERGENCIA - COLA LIMPIADA</div>';
+      }
+    }
+
+    function applyEstadoToUI(estado) {
+      if (!estado) return;
+      elements.posx.textContent = estado.x.toFixed(1);
+      elements.posy.textContent = estado.y.toFixed(1);
+      elements.posz.textContent = estado.z.toFixed(1);
+
+      systemState.absoluteMode = estado.modo === 'ABS';
+      updateModeUI();
+
+      updateMotorsUIState(estado.motores === 'ON');
+      updateGripUIState(estado.garra === 'ON');
+      updateEmergencyUIState(estado.emergencia === 'SI');
+      updateRemoteUI(estado.remoto);
+      updateBadge(elements.connected, 'Conectado: OK', 'on');
+    }
+
     function logLine(message) {
       const timestamp = new Date().toLocaleTimeString();
       elements.log.textContent += `[${timestamp}] ${message}\n`;
@@ -285,7 +362,8 @@
     }
 
     // Sistema RPC
-    async function rpcCall(method, params = {}) {
+    async function rpcCall(method, params = {}, options = {}) {
+        const silent = !!options.silent;
         // Obtener IP automáticamente de la URL
         function getServerIP() {
             if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -298,7 +376,7 @@
         elements.ipPreview.textContent = serverIp;
 
         if (!serverIp) {
-            logLine('❌ Error: No hay IP del servidor configurada');
+            if (!silent) logLine('❌ Error: No hay IP del servidor configurada');
             return null;
         }
 
@@ -311,7 +389,7 @@
 </methodCall>`;
 
         try {
-            logLine(`📤 Enviando: ${method}`);
+            if (!silent) logLine(`📤 Enviando: ${method}`);
             const response = await fetch(`http://${serverIp}:8080`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/xml' },
@@ -324,10 +402,10 @@
                 throw new Error(`Error en RPC: ${responseText}`);
             }
 
-            logLine(`✅ ${method} ejecutado correctamente`);
+            if (!silent) logLine(`✅ ${method} ejecutado correctamente`);
             return responseText;
         } catch (error) {
-            logLine(`❌ Error en ${method}: ${error.message}`);
+            if (!silent) logLine(`❌ Error en ${method}: ${error.message}`);
             return null;
         }
     }
@@ -338,6 +416,7 @@
         logLine('❌ Comando bloqueado - Sistema en emergencia');
         return;
       }
+      if (!ensureRemoteAccess()) return;
 
       enqueueCommand(command);
       rpcCall(command, {});
@@ -348,6 +427,7 @@
         logLine('❌ Movimiento bloqueado - Sistema en emergencia');
         return;
       }
+      if (!ensureRemoteAccess()) return;
 
       const x = parseFloat(document.getElementById('x').value) || 0;
       const y = parseFloat(document.getElementById('y').value) || 0;
@@ -364,13 +444,11 @@
     }
 
     function toggleMotors() {
-      const newState = !systemState.motorsOn;
-      systemState.motorsOn = newState;
-      elements.motors.textContent = newState ? 'ON' : 'OFF';
-      updateBadge(elements.motors, `Motores: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
+      const previousState = systemState.motorsOn;
+      const newState = !previousState;
+      if (newState && !ensureRemoteAccess()) return;
+      updateMotorsUIState(newState);
       
-      document.getElementById('motorToggleBtn').textContent = 
-        newState ? '⚙️ Apagar Motores' : '⚙️ Encender Motores';
       // reproducir sonido según estado
       try {
         if (newState) {
@@ -383,20 +461,29 @@
       } catch (e) { /* ignore audio errors */ }
 
       enqueueCommand(newState ? 'M17' : 'M18');
-      rpcCall('motors', { on: newState });
+      rpcCall('motors', { on: newState })
+        .then(response => {
+          if (!response) {
+            logLine('⚠️ Error cambiando estado de motores, revirtiendo UI');
+            updateMotorsUIState(previousState);
+          }
+        });
     }
 
     function toggleGrip() {
-      const newState = !systemState.gripperOn;
-      systemState.gripperOn = newState;
-      elements.grip.textContent = newState ? 'ON' : 'OFF';
-      updateBadge(elements.grip, `Garra: ${newState ? 'ON' : 'OFF'}`, newState ? 'on' : 'off');
-      
-      document.getElementById('gripToggleBtn').textContent = 
-        newState ? '🦾 Desactivar Garra' : '🦾 Activar Garra';
+      const previousState = systemState.gripperOn;
+      const newState = !previousState;
+      if (newState && !ensureRemoteAccess()) return;
+      updateGripUIState(newState);
       
       enqueueCommand(newState ? 'M3' : 'M5');
-      rpcCall('gripper', { on: newState });
+      rpcCall('gripper', { on: newState })
+        .then(response => {
+          if (!response) {
+            logLine('⚠️ Error cambiando estado de la garra, revirtiendo UI');
+            updateGripUIState(previousState);
+          }
+        });
     }
 
     function updateModeUI() {
@@ -406,17 +493,31 @@
         isAbs ? '↗️ Cambiar a REL (G91)' : '📍 Cambiar a ABS (G90)';
     }
 
+    function updateRemoteUI(isEnabled) {
+      systemState.remoteEnabled = isEnabled;
+      updateBadge(elements.remoteBadge, `🌐 Control Remoto: ${isEnabled ? 'ON' : 'OFF'}`, isEnabled ? 'on' : 'off');
+    }
+
     function toggleMode() {
       if (systemState.emergency) {
         logLine('❌ Cambio de modo bloqueado - Sistema en emergencia');
         return;
       }
+      if (!ensureRemoteAccess()) return;
 
       systemState.absoluteMode = !systemState.absoluteMode;
       const command = systemState.absoluteMode ? 'setAbs' : 'setRel';
       enqueueCommand(systemState.absoluteMode ? 'G90' : 'G91');
       rpcCall(command, {});
       updateModeUI();
+    }
+
+    function ensureRemoteAccess() {
+      if (!systemState.remoteEnabled) {
+        logLine('❌ Control remoto deshabilitado');
+        return false;
+      }
+      return true;
     }
 
     // Gestión de archivos
@@ -582,13 +683,23 @@
       rpcCall('resetEmergency', {});
     }
 
-    function refreshStatus() {
-      logLine('🔄 Actualizando estado del sistema...');
-      rpcCall('getEstado', {})
+    function refreshStatus(options = {}) {
+      const silent = !!options.silent;
+      if (!silent) {
+        logLine('🔄 Actualizando estado del sistema...');
+      }
+      rpcCall('getEstado', {}, { silent })
         .then(response => {
           if (response) {
-            logLine('✅ Estado del sistema actualizado');
+            const estado = parseEstadoResponse(response);
+            if (estado) {
+              applyEstadoToUI(estado);
+              if (!silent) logLine('✅ Estado del sistema actualizado');
+            }
           }
+        })
+        .catch(err => {
+          logLine(`❌ No se pudo actualizar estado: ${err.message}`);
         });
     }
 
@@ -651,16 +762,16 @@ Sesión iniciada: ${new Date().toLocaleString()}
         updateBadge(elements.motors, 'Motores: OFF', 'off');
         updateBadge(elements.grip, 'Garra: OFF', 'off');
         updateModeUI();
+        updateRemoteUI(systemState.remoteEnabled);
 
         logLine('🚀 Panel de usuario inicializado');
         logLine(`👤 Usuario: ${username} (${privilege})`);
         logLine(`🌐 Servidor: ${serverIp}`);
 
-        // Simular conexión exitosa
-        setTimeout(() => {
-            systemState.connection = true;
-            logLine('✅ Conexión con el robot establecida');
-        }, 1000);
+        refreshStatus({ silent: true });
+        statusPollHandle = setInterval(() => refreshStatus({ silent: true }), STATUS_POLL_MS);
+        systemState.connection = true;
+        logLine('✅ Conexión con el robot establecida');
     }
 
     // Event listeners

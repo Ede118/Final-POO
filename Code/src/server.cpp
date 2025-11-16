@@ -176,15 +176,18 @@ std::vector<std::string> Server::extractMultipleParams(const std::string& body, 
 }
 
 std::string Server::procesarRPC(const std::string& body, Login& login, RobotControllerSimple& robot,
-                        EstadoRobot& estado, Aprendizaje& aprendizaje, AdministradorSistema& admin) {
+                        EstadoRobot& estado, Aprendizaje& aprendizaje, AdministradorSistema& admin,
+                        bool quiet) {
     size_t s = body.find("<methodName>"), e = body.find("</methodName>");
     std::string metodo = (s != std::string::npos && e != std::string::npos) ? 
                          body.substr(s + 12, e - (s + 12)) : "desconocido";
     std::ostringstream xml;
 
-    std::cout << "=== INICIO PROCESAR RPC ===" << std::endl;
-    std::cout << "🔍 MÉTODO: " << metodo << std::endl;
-    std::cout << "📋 BODY: " << body << std::endl;
+    if (!quiet) {
+        std::cout << "=== INICIO PROCESAR RPC ===" << std::endl;
+        std::cout << "🔍 MÉTODO: " << metodo << std::endl;
+        std::cout << "📋 BODY: " << body << std::endl;
+    }
 
     if(metodo == "login"){ 
         std::string u, p;
@@ -313,18 +316,22 @@ std::string Server::procesarRPC(const std::string& body, Login& login, RobotCont
             << "</struct></value></param></params></methodResponse>";
     }
     else if(metodo == "setAbs") {
-        std::string u, p;
-        if(extractParams(body, u, p)) {
-            bool absoluto = (p == "true" || p == "1");
-            robot.setAbs(absoluto);
-            xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
-                << "<member><name>status</name><value><string>success</string></value></member>"
-                << "<member><name>message</name><value><string>Modo cambiado a " << (absoluto?"absoluto":"relativo") << "</string></value></member>"
-                << "</struct></value></param></params></methodResponse>";
-        }
+        robot.setAbs(true);
+        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+            << "<member><name>status</name><value><string>success</string></value></member>"
+            << "<member><name>message</name><value><string>Modo cambiado a absoluto</string></value></member>"
+            << "</struct></value></param></params></methodResponse>";
+    }
+    else if(metodo == "setRel") {
+        robot.setAbs(false);
+        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+            << "<member><name>status</name><value><string>success</string></value></member>"
+            << "<member><name>message</name><value><string>Modo cambiado a relativo</string></value></member>"
+            << "</struct></value></param></params></methodResponse>";
     }
     else if(metodo == "getEstado") {
         auto s = estado.leer();
+        bool remoto = admin.getRemoto();
         xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
             << "<member><name>x</name><value><double>" << s.x << "</double></value></member>"
             << "<member><name>y</name><value><double>" << s.y << "</double></value></member>"
@@ -333,6 +340,7 @@ std::string Server::procesarRPC(const std::string& body, Login& login, RobotCont
             << "<member><name>motores</name><value><string>" << (s.motores?"ON":"OFF") << "</string></value></member>"
             << "<member><name>garra</name><value><string>" << (s.garra?"ON":"OFF") << "</string></value></member>"
             << "<member><name>emergencia</name><value><string>" << (s.emergencia?"SI":"NO") << "</string></value></member>"
+            << "<member><name>remoto</name><value><string>" << (remoto?"ON":"OFF") << "</string></value></member>"
             << "</struct></value></param></params></methodResponse>";
     }
     else if(metodo == "home") {
@@ -359,6 +367,20 @@ std::string Server::procesarRPC(const std::string& body, Login& login, RobotCont
             << "<member><name>message</name><value><string>Aprendizaje detenido y guardado</string></value></member>"
             << "</struct></value></param></params></methodResponse>";
     }
+    else if (metodo == "enableRemote") {
+        admin.setRemoto(true);
+        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+            << "<member><name>status</name><value><string>success</string></value></member>"
+            << "<member><name>message</name><value><string>Control remoto habilitado</string></value></member>"
+            << "</struct></value></param></params></methodResponse>";
+    }
+    else if (metodo == "disableRemote") {
+        admin.setRemoto(false);
+        xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
+            << "<member><name>status</name><value><string>success</string></value></member>"
+            << "<member><name>message</name><value><string>Control remoto deshabilitado</string></value></member>"
+            << "</struct></value></param></params></methodResponse>";
+    }
     else {
         xml << "<?xml version=\"1.0\"?><methodResponse><params><param><value><struct>"
             << "<member><name>status</name><value><string>error</string></value></member>"
@@ -367,8 +389,10 @@ std::string Server::procesarRPC(const std::string& body, Login& login, RobotCont
     }
 
     std::string respuesta = xml.str();
-    std::cout << "📤 RESPUESTA XML: " << respuesta << std::endl;
-    std::cout << "=== FIN PROCESAR RPC ===" << std::endl;
+    if (!quiet) {
+        std::cout << "📤 RESPUESTA XML: " << respuesta << std::endl;
+        std::cout << "=== FIN PROCESAR RPC ===" << std::endl;
+    }
     
     return respuesta;
 }

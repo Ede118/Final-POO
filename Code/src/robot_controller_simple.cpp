@@ -32,17 +32,42 @@ void RobotControllerSimple::setAbs(bool abs) {
 }
 
 void RobotControllerSimple::setMotores(bool on) {
-    std::cout << "⚙️ MOTORES: " << (on ? "ENCENDER" : "APAGAR") << std::endl;
+    auto estado_actual = estado.leer();
+    if (estado_actual.motores == on) {
+        std::cout << "⚙️ MOTORES: solicitud ignorada, estado ya es "
+                  << (on ? "ENCENDIDOS" : "APAGADOS") << std::endl;
+        return;
+    }
+    std::cout << "⚙️ MOTORES: " << (estado_actual.motores ? "ENCENDIDOS" : "APAGADOS")
+              << " -> " << (on ? "ENCENDER" : "APAGAR") << std::endl;
+    
     estado.setMotores(on);
-    ejecutarComando(on ? "M17" : "M18");
-    registrarAprendizaje(on ? "M17" : "M18");
+    const char* comando = on ? "M17" : "M18";
+    ejecutarComando(comando);
+    registrarAprendizaje(comando);
+
+    auto nuevo_estado = estado.leer();
+    std::cout << "✅ MOTORES: " << (nuevo_estado.motores ? "ENCENDIDOS" : "APAGADOS") << std::endl;
 }
 
 void RobotControllerSimple::setGarra(bool on) {
-    std::cout << "🦾 GARRA: " << (on ? "ACTIVAR" : "DESACTIVAR") << std::endl;
+    auto estado_actual = estado.leer();
+    if (estado_actual.garra == on) {
+        std::cout << "🦾 GARRA: solicitud ignorada, estado ya es "
+                  << (on ? "ACTIVADA" : "DESACTIVADA") << std::endl;
+        return;
+    }
+
+    std::cout << "🦾 GARRA: " << (estado_actual.garra ? "ACTIVADA" : "DESACTIVADA")
+              << " -> " << (on ? "ACTIVAR" : "DESACTIVAR") << std::endl;
+
     estado.setGarra(on);
-    ejecutarComando(on ? "M3" : "M5");
-    registrarAprendizaje(on ? "M3" : "M5");
+    const char* comando = on ? "M3" : "M5";
+    ejecutarComando(comando);
+    registrarAprendizaje(comando);
+
+    auto nuevo_estado = estado.leer();
+    std::cout << "✅ GARRA: " << (nuevo_estado.garra ? "ACTIVADA" : "DESACTIVADA") << std::endl;
 }
 
 void RobotControllerSimple::emergencia() {
