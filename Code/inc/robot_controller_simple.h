@@ -1,4 +1,4 @@
-#pragma once
+
 #ifndef ROBOT_CONTROLLER_SIMPLE_H
 #define ROBOT_CONTROLLER_SIMPLE_H
 

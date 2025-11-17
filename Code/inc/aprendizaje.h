@@ -1,4 +1,4 @@
-#pragma once
+
 #ifndef APRENDIZAJE_H
 #define APRENDIZAJE_H
 
